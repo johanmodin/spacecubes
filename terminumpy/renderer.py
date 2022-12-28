@@ -1,11 +1,13 @@
-import os
-import time
-import sys
 import curses
 import curses.panel
-from output_device import OutputDevice
+import math
+import os
 import scipy
 from scipy.ndimage import convolve
+import time
+
+
+from output_device import OutputDevice
 
 
 class Renderer:
@@ -159,7 +161,6 @@ class Renderer:
 
 
 if __name__ == '__main__':
-    t1 = time.time()
     import numpy as np
     from camera import Camera
     world_size = 150
@@ -190,24 +191,32 @@ if __name__ == '__main__':
     c2 = convolve((cube_world == 0).astype(int), filter, mode='constant')
     cube_world[np.where((cube_world > 0) & (c1 > 16) & (c2 == 3))] = 3
 
-    r = Renderer(fps=10)
-    import math
-    # We're looking down the z-axis
+
+    # Create a renderer that is to render the Camera cam in the np array cube_world
+    r = Renderer(fps=0)
+
+    # Create a camera
     cam = Camera(r, x=0, y=0, z=0)
-    move_size = 3
-    moves = [move_size for i in range(100)]
+
+    t1 = time.time()
     i = 0
     for _ in range(100):
+        # Render the cube_world array as seen by cam
         r.render(cube_world, cam)
-        cam.move(x=0, y=moves[i % 100] * math.sin(i % 100 / 100 * math.pi * 2),
-                 z=moves[i % 100] * math.cos(i % 100 / 100 * math.pi * 2))
+
+        # Move the camera in a circle-ish pattern to visualize the 3d
+        # information more clearly
+        cam.move(x=0, y=3 * math.sin(i % 100 / 100 * math.pi * 2),
+                 z=3 * math.cos(i % 100 / 100 * math.pi * 2))
         #cam.rotate(pitch=0.1)
 
+        # Redirect the camera to look at the center of the cube
         cam.look_at(*cube_center)
         i+=1
-    curses.endwin()
     t2 = time.time()
-    print(os.get_terminal_size(), t2 - t1)
+    curses.endwin()
+    print(
+        f'Rendered {i} steps at resolution {os.get_terminal_size().lines, os.get_terminal_size().columns} in {t2 - t1} seconds')
 
     # ncplane_gradient
 

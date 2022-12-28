@@ -1,8 +1,5 @@
-from dataclasses import dataclass
 import math
 from pyquaternion import Quaternion
-
-
 import numpy as np
 
 class Camera:
@@ -18,12 +15,12 @@ class Camera:
         rotating the camera.
 
         Args:
-            x
-            y
-            z
-            roll
-            pitch
-            yaw
+            x (float): Initial world x position of camera
+            y (float): Initial world y position of camera
+            z (float): Initial world z position of camera
+            roll (float): Initial camera roll
+            pitch (float): Initial camera pitch
+            yaw (float): Initial camera yaw
     '''
     def __init__(self, renderer, x=0, y=0, z=0, roll=0, pitch=0, yaw=0):
         self.x = x
@@ -89,6 +86,8 @@ class Camera:
         '''
         # Convert to homogenous coordinates
         world_points = np.vstack((world_points, np.ones(world_points.shape[1])))
+
+        # Project world points to camera coordinate system
         camera_points = self.extrinsic_matrix @ world_points
         return camera_points[:-1, :]
 
@@ -113,7 +112,8 @@ class Camera:
 
         half_rot = rot * 0.5
         s = math.sin(half_rot)
-        self.Q = Quaternion(w = math.cos(half_rot), x = rot_axis[0] * s, y = rot_axis[1] * s, z = rot_axis[2] * s)
+        self.Q = Quaternion(w = math.cos(half_rot), x = rot_axis[0] * s, 
+                            y = rot_axis[1] * s, z = rot_axis[2] * s)
         self.regenerate_extrinsic_matrix()
 
     def move(self, x=0, y=0, z=0):
