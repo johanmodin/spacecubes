@@ -1,3 +1,4 @@
+from collections import defaultdict
 import curses
 import curses.panel
 import math
@@ -11,13 +12,18 @@ from output_device import OutputDevice
 
 
 class Renderer:
-    def __init__(self, output_device=None, fps=30):
+    def __init__(self, output_device=None, fps=30, colors={1: curses.COLOR_BLUE, 2: curses.COLOR_RED}):
         ''' Initializes the renderer.
             Args:
                 output_device (OutputDevice): An OutputDevice which 
                     receives the rendered output. If None, a default
                     OutputDevice for the current terminal will be created.
                 fps (int): The maximum number of frames per second to render
+                colors ({int: int}): A mapping from world point value to a curses
+                    color index. E.g., if the world at XYZ position (2, 5, 1) has value
+                    5, this can be rendered as green by specifying colors={5: curses.COLOR_GREEN}.
+                    See https://docs.python.org/3/library/curses.html#constants for
+                    more information on curses colors. Defaults to white for all values.
         '''
         if output_device:
             self.output_device = output_device
@@ -33,8 +39,21 @@ class Renderer:
         curses.curs_set(0)
         curses.start_color()
         curses.use_default_colors()
-        for i in range(0, curses.COLORS):
-            curses.init_pair(i + 1, i, -1)
+        
+        # Initialize all colors and save the color string -> pair index mapping
+        color_to_pair_idx = {}
+        for color_idx in range(curses.COLORS):
+            pair_idx = color_idx + 1
+            curses.init_pair(pair_idx, color_idx, -1)
+            color_to_pair_idx[color_idx] = pair_idx
+
+        # Create a map from value to the correct color pair object
+        self.colors = defaultdict(
+            lambda: curses.color_pair(curses.COLOR_WHITE))
+        if colors is not None:
+            self.colors.update({value: curses.color_pair(color_to_pair_idx[color]) 
+                                for value, color in colors.items()})
+
 
     def create_camera_panel(self):
         ''' Used to create a new curses panel for a new camera'''
@@ -124,10 +143,10 @@ class Renderer:
             wp = world_points[indices_remaining[i]]
             wx, wy, wz = wp[0], wp[1], wp[2]
             point_value = int(world_array[wx, wy, wz])
-            color = curses.color_pair(point_value)
+            pair_index = self.colors[point_value]
 
             # Add some kind of character at the pixel position
-            camera.panel.window().addch(*p, '\U000025A9', color)
+            camera.panel.window().addch(*p, '\U000025A9', pair_index)
 
         # Draw a box around the screen because it's neat and refresh the panel's contents
         camera.panel.window().box()
@@ -163,17 +182,16 @@ class Renderer:
 if __name__ == '__main__':
     import numpy as np
     from camera import Camera
-    world_size = 150
+    world_size = 100
 
     # Some kind of horse shoe shape
     thickness = 10
-    length = 50
-    mid = world_size // 2
+    length = 30
+    origin = world_size // 2
     cube_world = np.zeros((world_size+1, world_size+1, world_size+1))
-    cube_world[mid:mid + thickness + length, mid:mid + thickness, mid:mid + thickness] = 5
-    cube_world[mid:mid + thickness, mid:mid + thickness + length, mid:mid + thickness] = 5
-    cube_world[mid + length:mid + length + thickness, mid:mid + thickness + length, mid:mid + thickness] = 5
-    cube_center = np.array([s // 2 for s in cube_world.shape])
+    cube_world[origin:origin + thickness + length, origin:origin + thickness, origin:origin + thickness] = 1
+    cube_world[origin:origin + thickness, origin:origin + thickness + length, origin:origin + thickness] = 1
+    cube_world[origin + length:origin + length + thickness, origin:origin + thickness + length, origin:origin + thickness] = 1
 
     # Perform 3d convolution to find AABB edges
     # This is done "offline" for now until we have a faster solution
@@ -183,36 +201,70 @@ if __name__ == '__main__':
 
     # Seems to work ok but 3d conv is pretty slow over large volumes
     # Find cell edges by looking at how many neighbours each cell has
-    c1 = convolve((cube_world > 0).astype(int), filter, mode='constant')
-    cube_world[np.where((cube_world > 0) & (c1 <= 16))] = 3
+    #c1 = convolve((cube_world > 0).astype(int), filter, mode='constant')
+    #cube_world[np.where((cube_world > 0) & (c1 <= 16))] = 2
 
     # Probably does not work with complex geometries
     # Find inward cell edges by looking at how many neighbours each cell has
-    c2 = convolve((cube_world == 0).astype(int), filter, mode='constant')
-    cube_world[np.where((cube_world > 0) & (c1 > 16) & (c2 == 3))] = 3
+    #c2 = convolve((cube_world == 0).astype(int), filter, mode='constant')
+    #cube_world[np.where((cube_world > 0) & (c1 > 16) & (c2 == 3))] = 2
+    
+    #cube_world_bool = cube_world.astype(bool)
+    #cube_world_bool = np.pad(cube_world_bool, 1)
+    #face_x = np.where(np.bitwise_xor(cube_world_bool[:-1, :, :], cube_world_bool[1:, :, :]))
+    #face_y = np.where(np.bitwise_xor(cube_world_bool[:, :-1, :], cube_world_bool[:, 1:, :]))
+    #face_z = np.where(np.bitwise_xor(cube_world_bool[:, :, :-1], cube_world_bool[:, :, 1:]))
 
+    volume = cube_world
+    volume_int = (volume > 0).astype(np.int8)
+    volume_int = np.pad(volume_int, 1)
+
+    surface_x = volume_int[:-1, :, :] - volume_int[1:, :, :]
+    surface_y = volume_int[:, :-1, :] - volume_int[:, 1:, :]
+    surface_z = volume_int[:, :, :-1] - volume_int[:, :, 1:]
+
+    points_x_pos = np.where(surface_x == 1)
+    points_x_neg = np.where(surface_x == -1)
+    points_y_pos = np.where(surface_y == 1)
+    points_y_neg = np.where(surface_y == -1)
+    points_z_pos = np.where(surface_z == 1)
+    points_z_neg = np.where(surface_z == -1)
+
+    cube_world[:] = 0
+    cube_world[points_x_pos] = 2
+    cube_world[points_x_neg] = 3
+    cube_world[points_y_pos] = 4 # why no work
+    cube_world[points_y_neg] = 5
+    cube_world[points_z_pos] = 6
+    cube_world[points_z_neg] = 7
+
+    # Some interesting place to look at
+    object_center = np.average(np.argwhere(cube_world > 0), axis=0)
 
     # Create a renderer that is to render the Camera cam in the np array cube_world
-    r = Renderer(fps=0)
+    colors = {2: curses.COLOR_BLUE, 3: curses.COLOR_CYAN, 4: curses.COLOR_GREEN, 
+              5: curses.COLOR_MAGENTA, 6: curses.COLOR_RED, 7: curses.COLOR_YELLOW}
+    r = Renderer(fps=0, colors=colors)
 
     # Create a camera
     cam = Camera(r, x=0, y=0, z=0)
 
+    moves = [(1, 0, 0) for _ in range(100)] + [(0, 1, 0) for _ in range(100) ] + [(0, 0, 1) for _ in range(100)]
+
     t1 = time.time()
-    i = 0
-    for _ in range(100):
+    for i in range(len(moves)):
         # Render the cube_world array as seen by cam
         r.render(cube_world, cam)
 
         # Move the camera in a circle-ish pattern to visualize the 3d
         # information more clearly
-        cam.move(x=0, y=3 * math.sin(i % 100 / 100 * math.pi * 2),
-                 z=3 * math.cos(i % 100 / 100 * math.pi * 2))
+        cam.move(*moves[i])
+        #cam.move(x=0, y=3 * math.sin(i % 100 / 100 * math.pi * 2),
+        #         z=3 * math.cos(i % 100 / 100 * math.pi * 2))
         #cam.rotate(pitch=0.1)
 
-        # Redirect the camera to look at the center of the cube
-        cam.look_at(*cube_center)
-        i+=1
+        # Redirect the camera to look at the center of the object
+        cam.look_at(*object_center)
     t2 = time.time()
     curses.endwin()
     print(
