@@ -243,38 +243,21 @@ class Renderer:
         surface_z = world_array_int[:, :, :-1] - world_array_int[:, :, 1:]
 
         # Find the surfaces in the positive and negative direction of each dimension
-        x_outer_points_pos_w = np.argwhere(surface_x == 1)
-        x_outer_points_neg_w = np.argwhere(surface_x == -1)
-        y_outer_points_pos_w = np.argwhere(surface_y == 1)
-        y_outer_points_neg_w = np.argwhere(surface_y == -1)
-        z_outer_points_pos_w = np.argwhere(surface_z == 1)
-        z_outer_points_neg_w = np.argwhere(surface_z == -1)
-
-        # Order the points by distance such that we render the 
-        # farthest points first. Useful to not overwrite
-        # e.g., edges which should be visible from the camera perspective
-        #camera_position = np.array([[camera.x, camera.y, camera.z]])
-        #def sort_by_dist(camera_position, world_points):
-        #    point_distances=scipy.spatial.distance.cdist(camera_position, world_points)[0]
-        #    distance_sorting = np.argsort(-point_distances)
-        #    world_points = world_points[distance_sorting]
-        #    return world_points
-
-        #x_outer_points_pos_w = sort_by_dist(camera_position, x_outer_points_pos_w)
-        #x_outer_points_neg_w = sort_by_dist(camera_position, x_outer_points_neg_w)
-        #y_outer_points_pos_w = sort_by_dist(camera_position, y_outer_points_pos_w)
-        #y_outer_points_neg_w = sort_by_dist(camera_position, y_outer_points_neg_w)
-        #z_outer_points_pos_w = sort_by_dist(camera_position, z_outer_points_pos_w)
-        #z_outer_points_neg_w = sort_by_dist(camera_position, z_outer_points_neg_w)
+        # and compensate for padding
+        x_outer_points_pos_w = np.argwhere(surface_x == 1) + [-1, -1, -1]
+        x_outer_points_neg_w = np.argwhere(surface_x == -1) + [-1, -1, -1]
+        y_outer_points_pos_w = np.argwhere(surface_y == 1) + [-1, -1, -1]
+        y_outer_points_neg_w = np.argwhere(surface_y == -1) + [-1, -1, -1]
+        z_outer_points_pos_w = np.argwhere(surface_z == 1) + [-1, -1, -1]
+        z_outer_points_neg_w = np.argwhere(surface_z == -1) + [-1, -1, -1]
 
         # Keep track of surface cell values
-        positive_pad_offset = np.array([-1, -1, -1])
-        x_pos_values = world_array[tuple((x_outer_points_pos_w + positive_pad_offset).T)]
-        x_neg_values = world_array[tuple((x_outer_points_neg_w - [0, 1, 1]).T)]
-        y_pos_values = world_array[tuple((y_outer_points_pos_w + positive_pad_offset).T)]
-        y_neg_values = world_array[tuple((y_outer_points_neg_w - [1, 0, 1]).T)]
-        z_pos_values = world_array[tuple((z_outer_points_pos_w + positive_pad_offset).T)]
-        z_neg_values = world_array[tuple((z_outer_points_neg_w - [1, 1, 0]).T)]
+        x_pos_values = world_array[tuple((x_outer_points_pos_w).T)]
+        x_neg_values = world_array[tuple((x_outer_points_neg_w + [1, 0, 0]).T)]
+        y_pos_values = world_array[tuple((y_outer_points_pos_w).T)]
+        y_neg_values = world_array[tuple((y_outer_points_neg_w+ [0, 1, 0]).T)]
+        z_pos_values = world_array[tuple((z_outer_points_pos_w).T)]
+        z_neg_values = world_array[tuple((z_outer_points_neg_w + [0, 0, 1]).T)]
     
 
         # Turn the point & direction data into sets of 4 points
@@ -426,10 +409,9 @@ if __name__ == '__main__':
     cube_world[origin:origin + thickness + length, origin:origin + thickness, origin:origin + thickness] = 2
     cube_world[origin:origin + thickness, origin:origin + thickness + length, origin:origin + thickness] = 3
     cube_world[origin + length:origin + length + thickness, origin:origin + thickness + length, origin:origin + thickness] = 4
-    #cube_world[0, 0, 0] = 1
-    #cube_world[cube_world > 0] = np.random.randint(2, 8, size=len(cube_world[cube_world > 0]))
- 
 
+    #cube_world[:] = 0
+    #cube_world[0,0,0] = 1
     # Some interesting place to look at
     object_center = np.average(np.argwhere(cube_world > 0), axis=0)
 
@@ -439,10 +421,10 @@ if __name__ == '__main__':
     r = Renderer(fps=30, colors=colors)
 
     # Create a camera
-    cam_offset = 2
+    cam_offset = 5
     cam = Camera(r, x=-cam_offset, y=-cam_offset, z=-cam_offset)
-    move_size = 0.5
-    n_moves = 100
+    move_size = 0.1
+    n_moves = 1000
     moves = [(move_size, 0, 0) for _ in range(n_moves)] + [(0, move_size, 0)
                                                            for _ in range(n_moves)] + [(0, 0, move_size) for _ in range(n_moves)]
 
