@@ -4,9 +4,7 @@ import curses.panel
 import itertools
 import math
 import os
-import scipy
 import sys
-from scipy.ndimage import convolve
 import time
 
 
@@ -140,7 +138,7 @@ class Renderer:
         surfaces = surface_corner_offsets + points[:, np.newaxis, :]
         return surfaces
 
-    def fill_surfaces(self, world_quads, image_quads, quad_values=None, min_area=1):
+    def fill_surfaces(self, world_quads, image_quads, quad_values, min_area=1):
         ''' Takes N sets of 4 world points that each make up a square in a numpy array cell
             and N sets of 4 image frame points that correspond to the same points
             in the image space. The surface area of the image frame quadrilateral
@@ -157,14 +155,16 @@ class Renderer:
                     the image frame projection of the numpy array cell surface.
         '''
         new_world_points = []
+        new_quad_values = []
 
         # Calculate the area of the image quadrilaterals to determine
         # which point sets that are actually worth reprojecting with a
         # higher resolution. 
         image_areas = self.quad_area(image_quads)
-        for world_quad, image_quad, image_area in zip(world_quads, image_quads, image_areas):
+        for world_quad, image_quad, image_area, value in zip(world_quads, image_quads, image_areas, quad_values):
             if image_area <= min_area:
                 new_world_points.append(world_quad)
+                new_quad_values.extend([value for _ in range(len(world_quad))])
                 continue
 
             # Find which dimension of the point set that 
@@ -195,8 +195,12 @@ class Renderer:
             new_points = np.vstack([x.ravel(), y.ravel(), z.ravel()]).T
             new_world_points.append(new_points)
 
+            # Add values per new point stemming from the original cell's value
+            new_quad_values.extend([value for _ in range(len(new_points))])
+
+        assert len(np.concatenate(new_world_points)) == len(np.array(new_quad_values)), f"{len(np.concatenate(new_world_points))}, {len(np.array(new_quad_values))}"
         # Return all new points as a new array
-        return np.concatenate(new_world_points)
+        return np.concatenate(new_world_points), np.array(new_quad_values)
     
     #@profile
     def render(self, world_array, camera):
@@ -221,8 +225,14 @@ class Renderer:
         # can be further divided into -1 and 1, which represents the two
         # opposing surfaces of the dimension.
 
-        # Make array 0 and 1 valued to allow >1 values in actual world
+        # Make a new world array that is 0 and 1 valued
+        # as we need it for our surface finding algorithm
+        # The dtype is set to int8 as this speeds things up significantly
         world_array_int = (world_array > 0).astype(np.int8)
+
+        # Keep track of the values to allow rendering options depending on value
+        #world_points = world_array > 0
+        #world_values = world_array[world_points]
 
         # Pad with 0s in all dimensions to include boundaries of world
         world_array_int = np.pad(world_array_int, 1)
@@ -239,7 +249,34 @@ class Renderer:
         y_outer_points_neg_w = np.argwhere(surface_y == -1)
         z_outer_points_pos_w = np.argwhere(surface_z == 1)
         z_outer_points_neg_w = np.argwhere(surface_z == -1)
-        
+
+        # Order the points by distance such that we render the 
+        # farthest points first. Useful to not overwrite
+        # e.g., edges which should be visible from the camera perspective
+        #camera_position = np.array([[camera.x, camera.y, camera.z]])
+        #def sort_by_dist(camera_position, world_points):
+        #    point_distances=scipy.spatial.distance.cdist(camera_position, world_points)[0]
+        #    distance_sorting = np.argsort(-point_distances)
+        #    world_points = world_points[distance_sorting]
+        #    return world_points
+
+        #x_outer_points_pos_w = sort_by_dist(camera_position, x_outer_points_pos_w)
+        #x_outer_points_neg_w = sort_by_dist(camera_position, x_outer_points_neg_w)
+        #y_outer_points_pos_w = sort_by_dist(camera_position, y_outer_points_pos_w)
+        #y_outer_points_neg_w = sort_by_dist(camera_position, y_outer_points_neg_w)
+        #z_outer_points_pos_w = sort_by_dist(camera_position, z_outer_points_pos_w)
+        #z_outer_points_neg_w = sort_by_dist(camera_position, z_outer_points_neg_w)
+
+        # Keep track of surface cell values
+        positive_pad_offset = np.array([-1, -1, -1])
+        x_pos_values = world_array[tuple((x_outer_points_pos_w + positive_pad_offset).T)]
+        x_neg_values = world_array[tuple((x_outer_points_neg_w - [0, 1, 1]).T)]
+        y_pos_values = world_array[tuple((y_outer_points_pos_w + positive_pad_offset).T)]
+        y_neg_values = world_array[tuple((y_outer_points_neg_w - [1, 0, 1]).T)]
+        z_pos_values = world_array[tuple((z_outer_points_pos_w + positive_pad_offset).T)]
+        z_neg_values = world_array[tuple((z_outer_points_neg_w - [1, 1, 0]).T)]
+    
+
         # Turn the point & direction data into sets of 4 points
         # that define a surface of the cell 
         x_surfaces_pos_w = self.cube2surface(x_outer_points_pos_w, 0)
@@ -248,15 +285,6 @@ class Renderer:
         y_surfaces_neg_w = self.cube2surface(y_outer_points_neg_w, 1)
         z_surfaces_pos_w = self.cube2surface(z_outer_points_pos_w, 2)
         z_surfaces_neg_w = self.cube2surface(z_outer_points_neg_w, 2)
-
-        # Order the points by distance such that we render the 
-        # farthest points first. Useful to not overwrite
-        # e.g., edges which should be visible from the camera perspective
-        #camera_position = np.array([[camera.x, camera.y, camera.z]])
-        #point_distances=scipy.spatial.distance.cdist(camera_position, world_points)[0]
-        #distance_sorting = np.argsort(-point_distances)
-        #world_points = world_points[distance_sorting]
-        #print(x_surfaces_pos_w.shape)
 
         # Project the world points to the image frame
         x_surface_pos_ip, x_surface_pos_indices = self.world2image(x_surfaces_pos_w, camera)
@@ -270,12 +298,12 @@ class Renderer:
         # in the image frame. Use this information to potentially add more points into the
         # world frame square such that its resolution makes it seem like a surface
         # in the image frame
-        x_surfaces_pos_w = self.fill_surfaces(x_surfaces_pos_w, x_surface_pos_ip)
-        x_surfaces_neg_w = self.fill_surfaces(x_surfaces_neg_w, x_surface_neg_ip)
-        y_surfaces_pos_w = self.fill_surfaces(y_surfaces_pos_w, y_surface_pos_ip)
-        y_surfaces_neg_w = self.fill_surfaces(y_surfaces_neg_w, y_surface_neg_ip)
-        z_surfaces_pos_w = self.fill_surfaces(z_surfaces_pos_w, z_surface_pos_ip)
-        z_surfaces_neg_w = self.fill_surfaces(z_surfaces_neg_w, z_surface_neg_ip)
+        x_surfaces_pos_w, x_pos_values = self.fill_surfaces(x_surfaces_pos_w, x_surface_pos_ip, x_pos_values)
+        x_surfaces_neg_w, x_neg_values = self.fill_surfaces(x_surfaces_neg_w, x_surface_neg_ip, x_neg_values)
+        y_surfaces_pos_w, y_pos_values = self.fill_surfaces(y_surfaces_pos_w, y_surface_pos_ip, y_pos_values)
+        y_surfaces_neg_w, y_neg_values = self.fill_surfaces(y_surfaces_neg_w, y_surface_neg_ip, y_neg_values)
+        z_surfaces_pos_w, z_pos_values = self.fill_surfaces(z_surfaces_pos_w, z_surface_pos_ip, z_pos_values)
+        z_surfaces_neg_w, z_neg_values = self.fill_surfaces(z_surfaces_neg_w, z_surface_neg_ip, z_neg_values)
 
         # Project the new, fleshed out world into the image frame
         x_surface_pos_ip, x_surface_pos_indices = self.world2image(x_surfaces_pos_w, camera)
@@ -293,6 +321,25 @@ class Renderer:
         z_surface_pos_ip, z_surface_pos_indices = self.filter_image_points(camera, z_surface_pos_ip, z_surface_pos_indices)
         z_surface_neg_ip, z_surface_neg_indices = self.filter_image_points(camera, z_surface_neg_ip, z_surface_neg_indices)
 
+        # Remove the corresponding values as well so that the values indices match
+        # their points indices
+        x_pos_values = x_pos_values[x_surface_pos_indices]
+        x_neg_values = x_neg_values[x_surface_neg_indices]
+        y_pos_values = y_pos_values[y_surface_pos_indices]
+        y_neg_values = y_neg_values[y_surface_neg_indices]
+        z_pos_values = z_pos_values[z_surface_pos_indices]
+        z_neg_values = z_neg_values[z_surface_neg_indices]
+
+        # Remove the corresponding world points as well so that 
+        # the world point indices match the image points indices
+        x_surfaces_pos_w = x_surfaces_pos_w[x_surface_pos_indices]
+        x_surfaces_neg_w = x_surfaces_neg_w[x_surface_neg_indices]
+        y_surfaces_pos_w = y_surfaces_pos_w[y_surface_pos_indices]
+        y_surfaces_neg_w = y_surfaces_neg_w[y_surface_neg_indices]
+        z_surfaces_pos_w = z_surfaces_pos_w[z_surface_pos_indices]
+        z_surfaces_neg_w = z_surfaces_neg_w[z_surface_neg_indices]
+
+
         # Sleep as needed to not exceed the frame rate of self.fps
         if self.fps is not None and self.fps > 0:
             t_wait = self.next_frame - time.time()
@@ -302,32 +349,39 @@ class Renderer:
 
         camera.panel.window().erase()
 
+        world_points = np.concatenate([x_surfaces_pos_w, x_surfaces_neg_w, y_surfaces_pos_w,
+                                       y_surfaces_neg_w, z_surfaces_pos_w, z_surfaces_neg_w])
+        image_points = np.concatenate([x_surface_pos_ip, x_surface_neg_ip,y_surface_pos_ip,
+                                       y_surface_neg_ip, z_surface_pos_ip, z_surface_neg_ip])
+        values = np.concatenate([x_pos_values, x_neg_values, y_pos_values, 
+                                 y_neg_values, z_pos_values, z_neg_values])
+
+        # Sort world points by distance so that we can paint the
+        # further points first in order to not overwrite a nearer surface
+        camera_position = np.array([[camera.x, camera.y, camera.z]])
+        point_distances = np.linalg.norm(camera_position - world_points, axis=1)
+        distance_sorting = np.argsort(-point_distances)
+        image_points = image_points[distance_sorting]
+        values = values[distance_sorting]
+
         # Print new screen content
-        self.paint_points(x_surface_pos_ip, camera)
-        self.paint_points(x_surface_neg_ip, camera)
-        self.paint_points(y_surface_pos_ip, camera)
-        self.paint_points(y_surface_neg_ip, camera)
-        self.paint_points(z_surface_pos_ip, camera)
-        self.paint_points(z_surface_neg_ip, camera)
+        self.paint_points(image_points, values, camera)
 
         # Draw a box around the screen because it's neat and refresh the panel's contents
         camera.panel.window().box()
         camera.panel.window().refresh()
         curses.panel.update_panels()
 
-    def paint_points(self, image_points, camera):
+    def paint_points(self, image_points, values, camera):
         for i, p in enumerate(image_points):
-            # TODO: Fix value to color map thing
             # Find the value of the world point corresponding to the 
             # image frame point p in order to decide color/attributes
-            #wp = world_points[indices_remaining[i]]
-            #wx, wy, wz = wp[0], wp[1], wp[2]
-            #point_value = int(world_array[wx, wy, wz])
-            #pair_index = self.colors[point_value]
+            pair_index = self.colors[values[i]]
 
             # Add some kind of character at the pixel position
             #camera.panel.window().addch(*p, '\U000025A9', pair_index)
-            camera.panel.window().addch(int(p[0]), int(p[1]), '\U000025A9', 2)
+            camera.panel.window().addch(
+                int(p[0]), int(p[1]), '\U000025A9', pair_index)
 
 
 
@@ -369,27 +423,12 @@ if __name__ == '__main__':
     length = 10
     origin = world_size // 2
     cube_world = np.zeros((world_size+1, world_size+1, world_size+1))
-    cube_world[origin:origin + thickness + length, origin:origin + thickness, origin:origin + thickness] = 1
-    cube_world[origin:origin + thickness, origin:origin + thickness + length, origin:origin + thickness] = 1
-    cube_world[origin + length:origin + length + thickness, origin:origin + thickness + length, origin:origin + thickness] = 1
+    cube_world[origin:origin + thickness + length, origin:origin + thickness, origin:origin + thickness] = 2
+    cube_world[origin:origin + thickness, origin:origin + thickness + length, origin:origin + thickness] = 3
+    cube_world[origin + length:origin + length + thickness, origin:origin + thickness + length, origin:origin + thickness] = 4
     #cube_world[0, 0, 0] = 1
+    #cube_world[cube_world > 0] = np.random.randint(2, 8, size=len(cube_world[cube_world > 0]))
  
-    # Seems to work ok but 3d conv is pretty slow over large volumes
-    # Find cell edges by looking at how many neighbours each cell has
-    #c1 = convolve((cube_world > 0).astype(int), filter, mode='constant')
-    #cube_world[np.where((cube_world > 0) & (c1 <= 16))] = 2
-
-    # Probably does not work with complex geometries
-    # Find inward cell edges by looking at how many neighbours each cell has
-    #c2 = convolve((cube_world == 0).astype(int), filter, mode='constant')
-    #cube_world[np.where((cube_world > 0) & (c1 > 16) & (c2 == 3))] = 2
-    
-    #cube_world_bool = cube_world.astype(bool)
-    #cube_world_bool = np.pad(cube_world_bool, 1)
-    #face_x = np.where(np.bitwise_xor(cube_world_bool[:-1, :, :], cube_world_bool[1:, :, :]))
-    #face_y = np.where(np.bitwise_xor(cube_world_bool[:, :-1, :], cube_world_bool[:, 1:, :]))
-    #face_z = np.where(np.bitwise_xor(cube_world_bool[:, :, :-1], cube_world_bool[:, :, 1:]))
-
 
     # Some interesting place to look at
     object_center = np.average(np.argwhere(cube_world > 0), axis=0)
