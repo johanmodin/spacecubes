@@ -6,6 +6,7 @@ import math
 import os
 import sys
 import time
+import numpy as np
 
 
 from output_device import OutputDevice
@@ -15,8 +16,12 @@ class Renderer:
     def __init__(
         self,
         output_device=None,
-        fps=30,
-        colors={1: curses.COLOR_BLUE, 2: curses.COLOR_RED},
+        fps=0,
+        colors={1: curses.COLOR_BLUE, 2: curses.COLOR_RED, "border": curses.COLOR_CYAN},
+        show_border=True,
+        border_thickness_frac=0.05,
+        border_value=np.finfo(np.float64).eps,
+        max_cell_surface_side_px=128,
     ):
         """Initializes the renderer.
         Args:
@@ -27,8 +32,23 @@ class Renderer:
             colors ({int: int}): A mapping from world point value to a curses
                 color index. E.g., if the world at XYZ position (2, 5, 1) has value
                 5, this can be rendered as green by specifying colors={5: curses.COLOR_GREEN}.
+                Can also take the 'border' string as value, which is then used to color
+                the border's of the world array's cells.
                 See https://docs.python.org/3/library/curses.html#constants for
                 more information on curses colors. Defaults to white for all values.
+            show_border (bool): Whether to draw a border on the edge of each cell
+                of the numpy world array
+            border_thickness_frac (float): A value in the [0, 1] range that defines
+                the fraction of a world cell's size that is replaced with border
+            border value (float): Currently used to represent border's internally.
+                Should just be set to not conflict with other values/colors.
+            max_cell_surface_side_px (int): The maximum rendered side length of a cell
+                measured in pixels. Thus, the maximum resolution of a cell surface is
+                 max_cell_surface_side_px * max_cell_surface_side_px. Can be set to
+                 e.g., math.inf to allow infite resolution, but this might be unstable as
+                 points outside the image plane are currently included in
+                 the surface fill operation which could lead to trying to allocate
+                 inf * inf image points, which does not fit in memory.
         """
         if output_device:
             self.output_device = output_device
@@ -49,7 +69,7 @@ class Renderer:
         color_to_pair_idx = {}
         for color_idx in range(curses.COLORS):
             pair_idx = color_idx + 1
-            curses.init_pair(pair_idx, color_idx, -1)
+            curses.init_pair(pair_idx, 0, color_idx)
             color_to_pair_idx[color_idx] = pair_idx
 
         # Create a map from value to the correct color pair object
@@ -61,6 +81,13 @@ class Renderer:
                     for value, color in colors.items()
                 }
             )
+        self.show_border = show_border
+        self.border_frac = border_thickness_frac
+        self.border_value = border_value
+        if self.show_border:
+            self.colors[self.border_value] = self.colors["border"]
+
+        self.max_cell_surface_side_px = max_cell_surface_side_px
 
     def create_camera_panel(self):
         """Used to create a new curses panel for a new camera"""
@@ -148,7 +175,9 @@ class Renderer:
         surfaces = surface_corner_offsets + points[:, np.newaxis, :]
         return surfaces
 
-    def fill_surfaces(self, world_quads, image_quads, quad_values, min_area=1):
+    def fill_surfaces(
+        self, world_quads, image_quads, quad_values, fixed_dim, min_area=1
+    ):
         """Takes N sets of 4 world points that each make up a square in a numpy array cell
         and N sets of 4 image frame points that correspond to the same points
         in the image space. The surface area of the image frame quadrilateral
@@ -164,58 +193,109 @@ class Renderer:
                 4 uv points in the image frame. Each such set represents
                 the image frame projection of the numpy array cell surface.
         """
+        # This method accounts for like 85% of the exec. time
+        # so if we could vectorize it that'd be great..
+        # TODO: Optimize
         new_world_points = []
         new_quad_values = []
+
+        # Vectorize some operations for performance
+        fixed_dim_values = world_quads[:, 0, fixed_dim]
+        world_quad_min = np.min(world_quads, axis=1)
+        world_quad_max = np.max(world_quads, axis=1)
 
         # Calculate the area of the image quadrilaterals to determine
         # which point sets that are actually worth reprojecting with a
         # higher resolution.
         image_areas = self.quad_area(image_quads)
-        for world_quad, image_quad, image_area, value in zip(
-            world_quads, image_quads, image_areas, quad_values
-        ):
+        for i in range(len(world_quads)):
+            world_quad = world_quads[i]
+            image_area = image_areas[i]
+            quad_value = quad_values[i]
+
             if image_area <= min_area:
                 new_world_points.append(world_quad)
-                new_quad_values.extend([value for _ in range(len(world_quad))])
+                new_quad_values.extend([quad_value for _ in range(len(world_quad))])
                 continue
 
-            # Find which dimension of the point set that
-            # is constant
-            fixed_dim = np.argmax(
-                np.all(world_quad[:-1, :] == world_quad[1:, :], axis=0)
-            )
-            fixed_dim_value = world_quad[0, fixed_dim]
-            nonfixed_dims = [0, 1, 2]
-            nonfixed_dims.remove(fixed_dim)
+            # Get the value of the surface's constant dimension
+            fixed_dim_value = fixed_dim_values[i]
+            nonfixed_dims = [d for d in range(3) if d != fixed_dim]
 
             # Create linspaces for the nonconstant dimensions to fill the
             # world cell surface
-            side = math.ceil(math.sqrt(image_area))
-            dim_a = np.linspace(
-                np.min(world_quad[:, nonfixed_dims[0]]),
-                np.max(world_quad[:, nonfixed_dims[0]]),
-                side,
+            # The 1.5 constant is just an estimated factor that increases the
+            # number of points such that missing points in the rendered surface is rare
+            side = int(
+                min(
+                    math.ceil(math.sqrt(image_area)) * 1.5,
+                    self.max_cell_surface_side_px,
+                )
             )
-            dim_b = np.linspace(
-                np.min(world_quad[:, nonfixed_dims[1]]),
-                np.max(world_quad[:, nonfixed_dims[1]]),
-                side,
+
+            # Faster version of np.linspace
+            step = (
+                world_quad_max[i, nonfixed_dims[0]]
+                - world_quad_min[i, nonfixed_dims[0]]
+            ) / side
+            dim_a = itertools.accumulate(
+                [world_quad_min[i, nonfixed_dims[0]]] + [step for _ in range(side)]
+            )
+
+            step = (
+                world_quad_max[i, nonfixed_dims[1]]
+                - world_quad_min[i, nonfixed_dims[1]]
+            ) / side
+            dim_b = itertools.accumulate(
+                [world_quad_min[i, nonfixed_dims[1]]] + [step for _ in range(side)]
             )
 
             # Make sure that our coordinates are actually
             # ordered x y z
             coordinates = [dim_a, dim_b]
-            coordinates.insert(fixed_dim, fixed_dim_value)
+            coordinates.insert(fixed_dim, [fixed_dim_value])
 
             # Create the meshgrid containing the new surface points
-            x, y, z = np.meshgrid(*coordinates)
-
-            # Reorder the coordinates into (N, 3)
-            new_points = np.vstack([x.ravel(), y.ravel(), z.ravel()]).T
+            new_points = np.array(list(itertools.product(*coordinates)))
             new_world_points.append(new_points)
 
+            values = np.full(len(new_points), quad_value)
+
+            # Draw cell borders to ease 3d understanding
+            n_points_for_border = 9
+            if self.show_border and len(new_points) >= n_points_for_border:
+                dim_a_border_size = (
+                    world_quad_max[i, nonfixed_dims[0]]
+                    - world_quad_min[i, nonfixed_dims[0]]
+                ) * self.border_frac
+                dim_b_border_size = (
+                    world_quad_max[i, nonfixed_dims[1]]
+                    - world_quad_min[i, nonfixed_dims[1]]
+                ) * self.border_frac
+
+                # Set all values on the cell's border to the border value
+                values[
+                    (
+                        new_points[:, nonfixed_dims[0]]
+                        <= world_quad_min[i, nonfixed_dims[0]] + dim_a_border_size
+                    )
+                    | (
+                        new_points[:, nonfixed_dims[0]]
+                        >= world_quad_max[i, nonfixed_dims[0]] - dim_a_border_size
+                    )
+                    | (
+                        new_points[:, nonfixed_dims[1]]
+                        <= world_quad_min[i, nonfixed_dims[1]] + dim_b_border_size
+                    )
+                    | (
+                        new_points[:, nonfixed_dims[1]]
+                        >= world_quad_max[i, nonfixed_dims[1]] - dim_b_border_size
+                    )
+                ] = self.border_value
+
             # Add values per new point stemming from the original cell's value
-            new_quad_values.extend([value for _ in range(len(new_points))])
+            # or from the border value
+            new_quad_values.extend(values)
 
         # Return all new points as a new array
         return np.concatenate(new_world_points), np.array(new_quad_values)
@@ -310,22 +390,40 @@ class Renderer:
         # world frame square such that its resolution makes it seem like a surface
         # in the image frame
         x_surfaces_pos_w, x_pos_values = self.fill_surfaces(
-            x_surfaces_pos_w, x_surface_pos_ip, x_pos_values
+            x_surfaces_pos_w,
+            x_surface_pos_ip,
+            x_pos_values,
+            0,
         )
         x_surfaces_neg_w, x_neg_values = self.fill_surfaces(
-            x_surfaces_neg_w, x_surface_neg_ip, x_neg_values
+            x_surfaces_neg_w,
+            x_surface_neg_ip,
+            x_neg_values,
+            0,
         )
         y_surfaces_pos_w, y_pos_values = self.fill_surfaces(
-            y_surfaces_pos_w, y_surface_pos_ip, y_pos_values
+            y_surfaces_pos_w,
+            y_surface_pos_ip,
+            y_pos_values,
+            1,
         )
         y_surfaces_neg_w, y_neg_values = self.fill_surfaces(
-            y_surfaces_neg_w, y_surface_neg_ip, y_neg_values
+            y_surfaces_neg_w,
+            y_surface_neg_ip,
+            y_neg_values,
+            1,
         )
         z_surfaces_pos_w, z_pos_values = self.fill_surfaces(
-            z_surfaces_pos_w, z_surface_pos_ip, z_pos_values
+            z_surfaces_pos_w,
+            z_surface_pos_ip,
+            z_pos_values,
+            2,
         )
         z_surfaces_neg_w, z_neg_values = self.fill_surfaces(
-            z_surfaces_neg_w, z_surface_neg_ip, z_neg_values
+            z_surfaces_neg_w,
+            z_surface_neg_ip,
+            z_neg_values,
+            2,
         )
 
         # Project the new, fleshed out world into the image frame
@@ -386,15 +484,6 @@ class Renderer:
         z_surfaces_pos_w = z_surfaces_pos_w[z_surface_pos_indices]
         z_surfaces_neg_w = z_surfaces_neg_w[z_surface_neg_indices]
 
-        # Sleep as needed to not exceed the frame rate of self.fps
-        if self.fps is not None and self.fps > 0:
-            t_wait = self.next_frame - time.time()
-            self.next_frame = time.time() + 1 / self.fps
-            if t_wait > 0:
-                time.sleep(t_wait)
-
-        camera.panel.window().erase()
-
         world_points = np.concatenate(
             [
                 x_surfaces_pos_w,
@@ -430,36 +519,91 @@ class Renderer:
         # further points first in order to not overwrite a nearer surface
         camera_position = np.array([[camera.x, camera.y, camera.z]])
         point_distances = np.linalg.norm(camera_position - world_points, axis=1)
-        distance_sorting = np.argsort(-point_distances)
+        distance_sorting = np.argsort(point_distances)
         image_points = image_points[distance_sorting]
         values = values[distance_sorting]
 
+        # Round to nearest integer position
+        image_points = (np.round(image_points)).astype(int)
+
+        # Sleep as needed to not exceed the frame rate of self.fps
+        if self.fps is not None and self.fps > 0:
+            t_wait = self.next_frame - time.time()
+            self.next_frame = time.time() + 1 / self.fps
+            if t_wait > 0:
+                time.sleep(t_wait)
+
         # Print new screen content
         self.paint_points(image_points, values, camera)
+
+    def paint_points(self, image_points, values, camera):
+        """Paints characters at positions defined by image_points and with
+        colors as defined by corresponding element in values. However,
+        the character used here is just a space and the actual color comes
+        from changing the foreground to the background color and vice versa,
+        thus filling the entire character cell with color.
+
+        Args:
+            image_points (np.array): A Nx2 array that consists of N points
+                with (u, v) coordinates. The (u, v) coordinates define the pixel
+                position on the screen on which to draw the point
+            values (np.array): A (N,)-shaped array that consists of one
+                value for every point in image_points. The point and value
+                correspondence is done by index, i.e., image_points[i] will
+                be drawn with the color that corresponds to the value of values[i].
+            camera (Camera): The Camera object that holds the window in which
+                to draw the pixels/characters.
+
+        """
+
+        # Remove old image contents
+        camera.panel.window().erase()
+
+        """
+        # Some code for updating just the necessary elements
+        #camera.panel.window().erase()
+        h, w = camera.panel.window().getmaxyx()
+        frame = np.zeros((h, w))
+        frame[image_points[:, 0], image_points[:, 1]] = values
+        if camera.prev_frame is not None:
+            cond = frame != camera.prev_frame
+            image_points = np.argwhere(cond)
+            values = frame[np.where(cond)]
+
+        camera.prev_frame = frame
+        """
+
+        # Paint each image point coordinate that has not already been painted
+        # This is ok since the image points are distance sorted
+        painted_coordinates = set()
+        for i, p in enumerate(image_points):
+            p = (p[0], p[1])
+            if p in painted_coordinates:
+                continue
+            painted_coordinates.add(p)
+            # Find the value of the world point corresponding to the
+            # image frame point p in order to decide color/attributes
+            pair_index = self.colors[values[i]]
+
+            # Add some kind of character at the pixel position
+            camera.panel.window().addch(*p, " ", pair_index)
 
         # Draw a box around the screen because it's neat and refresh the panel's contents
         camera.panel.window().box()
         camera.panel.window().refresh()
         curses.panel.update_panels()
 
-    def paint_points(self, image_points, values, camera):
-        for i, p in enumerate(image_points):
-            # Find the value of the world point corresponding to the
-            # image frame point p in order to decide color/attributes
-            pair_index = self.colors[values[i]]
-
-            # Add some kind of character at the pixel position
-            camera.panel.window().addch(int(p[0]), int(p[1]), "\U000025A9", pair_index)
-
     def project_points(self, points, camera, image_size):
         """Projects points from camera coordinate system (XYZ) to
         image plane (UV).
 
             Args:
-                camera (Camera): The points will be projected onto
-                    this camera's image plane.
                 points (np.array): An array of (3, N) points specified
                     in the camera's coordinate system
+                camera (Camera): The points will be projected onto
+                    this camera's image plane.
+                image_size ((int, int)): A tuple of two ints that
+                    describe the image frame's (height, width).
         """
         scale_mat = np.array([[image_size[0], 0, 0], [0, image_size[1], 0], [0, 0, 1]])
         h_points_i = scale_mat @ camera.intrinsic_matrix @ points
@@ -467,41 +611,45 @@ class Renderer:
         h_points_i[0, :] = h_points_i[0, :] / h_points_i[2, :]
         h_points_i[1, :] = h_points_i[1, :] / h_points_i[2, :]
 
-        # Remove points behind the camera
-        cond = h_points_i[2, :] >= 0
-        visible_indices = np.where(cond)[0]
+        # Find points behind the camera
+        visible_indices = np.where(h_points_i[2, :] >= 0)
 
         # Remove the last column
         points_im = h_points_i[:2, :]
         return points_im, visible_indices
 
 
+def exit_curses():
+    curses.nocbreak()
+    curses.echo()
+    curses.endwin()
+
+
 if __name__ == "__main__":
-    import numpy as np
     from camera import Camera
 
-    world_size = 30
+    world_size = 5
 
     # Some kind of horse shoe shape
-    thickness = 2
-    length = 10
+    thickness = 3
+    length = 1
     origin = world_size // 2
     cube_world = np.zeros((world_size + 1, world_size + 1, world_size + 1))
     cube_world[
         origin : origin + thickness + length,
         origin : origin + thickness,
         origin : origin + thickness,
-    ] = 2
+    ] = 6
     cube_world[
         origin : origin + thickness,
         origin : origin + thickness + length,
         origin : origin + thickness,
-    ] = 3
+    ] = 6
     cube_world[
         origin + length : origin + length + thickness,
         origin : origin + thickness + length,
         origin : origin + thickness,
-    ] = 4
+    ] = 6
 
     # cube_world[:] = 0
     # cube_world[0,0,0] = 1
@@ -516,6 +664,7 @@ if __name__ == "__main__":
         5: curses.COLOR_MAGENTA,
         6: curses.COLOR_RED,
         7: curses.COLOR_YELLOW,
+        "border": curses.COLOR_CYAN,
     }
     r = Renderer(fps=30, colors=colors)
 
@@ -523,31 +672,37 @@ if __name__ == "__main__":
     cam_offset = 5
     cam = Camera(r, x=-cam_offset, y=-cam_offset, z=-cam_offset)
     move_size = 0.1
-    n_moves = 1000
+    n_moves = 100
     moves = (
         [(move_size, 0, 0) for _ in range(n_moves)]
         + [(0, move_size, 0) for _ in range(n_moves)]
+        + [(0, 0, move_size) for _ in range(n_moves)]
         + [(0, 0, move_size) for _ in range(n_moves)]
     )
 
     t1 = time.time()
     for i in range(len(moves)):
+        # Move the camera in a circle-ish pattern to visualize the 3d
+        # information more clearly
+        cam.move(*moves[i])
+
+        # Redirect the camera to look at the center of the object
         cam.look_at(*object_center)
 
         # Render the cube_world array as seen by cam
         r.render(cube_world, cam)
 
-        # Move the camera in a circle-ish pattern to visualize the 3d
-        # information more clearly
-        cam.move(*moves[i])
         # cam.move(x=0, y=3 * math.sin(i % 100 / 100 * math.pi * 2),
         #         z=3 * math.cos(i % 100 / 100 * math.pi * 2))
         # cam.rotate(pitch=0.1)
 
-        # Redirect the camera to look at the center of the object
-        cam.look_at(*object_center)
     t2 = time.time()
-    curses.endwin()
+    exit_curses()
     print(
         f"Rendered {i} steps at resolution {os.get_terminal_size().lines, os.get_terminal_size().columns} in {t2 - t1} seconds"
     )
+
+
+# TODO:
+# Fler backends
+# Terminal, cairo? blend2D? qt? drawsvg?
