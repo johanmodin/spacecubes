@@ -24,7 +24,7 @@ class Camera:
         yaw (float): Initial camera yaw
     """
 
-    def __init__(self, renderer, x=0, y=0, z=0, roll=0, pitch=0, yaw=0):
+    def __init__(self, x=0, y=0, z=0, roll=0, pitch=0, yaw=0):
         self.x = x
         self.y = y
         self.z = z
@@ -35,7 +35,6 @@ class Camera:
         # Generate the camera matrices
         self.regenerate_extrinsic_matrix()
         self.regenerate_intrinsic_matrix()
-        self.panel = renderer.create_camera_panel()
 
     def quat_from_ypr(self, yaw=0, pitch=0, roll=0):
         """Create a quaternion from yaw, pitch and roll given in radians"""
