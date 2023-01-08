@@ -1,26 +1,19 @@
-from collections import defaultdict
-import curses
-import curses.panel
-import itertools
 import math
-import os
-import sys
-import time
 import numpy as np
 
-
-from devices.device import OutputDevice
-from renderer import Renderer
+from .renderer import Renderer
 
 
 class VectorRenderer(Renderer):
-    def __init__(self, arg, *args, **kwargs):
-        super(VectorRenderer, self).__init__(arg, *args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super(VectorRenderer, self).__init__(*args, **kwargs)
         """Initializes the vector renderer.
         """
+        self.cell_grid_image_size = None
 
-    def render(self, world_array, camera):
-        """Render a scene to the output device.
+    def render(self, world_array, camera, image_size):
+        """ Create a image_size-sized np array that represents
+            the projection of the world_array as seen from camera.
 
         Args:
             world_array (np.array): A numpy array which
@@ -29,120 +22,136 @@ class VectorRenderer(Renderer):
             camera (Camera): A Camera object that allows the render-function
                 to get the translation and rotation of the camera
                 with regards to world_array
+            image_size ((int, int)): A tuple of two ints representing the
+                desired (height, width) of the output numpy array.
         """
 
-        """
-        # Remove old image contents
-        camera.panel.window().erase()
-        
-        """
-        world_surfaces = self.render_surfaces(world_array, camera)
+        # Get world coordinate system surfaces from the render-function of the parent Renderer
+        surfaces = self.render_surfaces(world_array, camera)
+
+        # Project the world points to the image
+        for surface_direction in surfaces:
+            surfaces[surface_direction]['image_coordinates'], visible_indices = self.world_points_to_image_points(
+                surfaces[surface_direction]['world_coordinates'], camera, image_size)
+
+        # Reorder y-axis elements to align them with the orders of other axes
+        surfaces[(0, 1, 0)]['image_coordinates'] = np.take(surfaces[(
+            0, 1, 0)]['image_coordinates'], np.array([3, 1, 2, 0]), axis=1)
+        surfaces[(0, -1, 0)]['image_coordinates'] = np.take(surfaces[(
+            0, -1, 0)]['image_coordinates'], np.array([3, 1, 2, 0]), axis=1)
+
+        camera_position = np.array([[camera.x, camera.y, camera.z]])
+        pos_diffs = {}
+        positive_pos_along_surface_axis = {}
+        for surf_dir in surfaces:
+            world_points = surfaces[surf_dir]['world_coordinates']
+            pos_diffs[surf_dir] = np.mean(camera_position - world_points, axis=1)
+            dimension = np.argmax(np.abs(surf_dir))
+            positive_pos_along_surface_axis[surf_dir] = pos_diffs[surf_dir][:, dimension] >= 0
+
+        # Remove the surface direction key and concatenate everything into bigger
+        # piles of data to make handling it a bit easier
+        image_points = np.concatenate([surfaces[d]['image_coordinates'] for d in surfaces])
+        values = np.concatenate([surfaces[d]['values'] for d in surfaces ])
+        image_surface_order = np.concatenate([positive_pos_along_surface_axis[d] for d in positive_pos_along_surface_axis])
+        image_points_distance = np.linalg.norm(np.concatenate(
+            [pos_diffs[d] for d in pos_diffs]), axis=1)
 
 
-    def project_lines(self, surfaces, camera, image_size):
-        """Projects points from camera coordinate system (XYZ) to
-        image plane (UV).
+        # Sort the surfaces and accompanying data by the surface's
+        # average distance to the camera. This seems to be a 
+        # good enough approximation for drawing order to avoid artifacts.
+        distance_sorting = np.argsort(-image_points_distance)
+        image_points = image_points[distance_sorting]
+        image_surface_order = image_surface_order[distance_sorting]
+        values = values[distance_sorting]
 
-            Args:
-                points (np.array): An array of (3, N) points specified
-                    in the camera's coordinate system
-                camera (Camera): The points will be projected onto
-                    this camera's image plane.
-                image_size ((int, int)): A tuple of two ints that
-                    describe the image frame's (height, width).
-        """
-        scale_mat = np.array([[image_size[0], 0, 0], [0, image_size[1], 0], [0, 0, 1]])
-        h_points_i = scale_mat @ camera.intrinsic_matrix @ points
+        # Reorder the surface points so that we can form polygons of all quads
+        # by using the vectors (b - a), (c - b), (d - c) and (a - d)
+        if any(image_surface_order):
+            image_points[image_surface_order] = image_points[image_surface_order][:, [2, 0, 1, 3], :]
 
-        h_points_i[0, :] = h_points_i[0, :] / h_points_i[2, :]
-        h_points_i[1, :] = h_points_i[1, :] / h_points_i[2, :]
-
-        # Find points behind the camera
-        visible_indices = np.where(h_points_i[2, :] >= 0)
-
-        # Remove the last column
-        points_im = h_points_i[:2, :]
-        return points_im, visible_indices
+        if any(~image_surface_order):
+            image_points[~image_surface_order] = image_points[~image_surface_order][:, [2, 3, 1, 0], :]
 
 
-if __name__ == "__main__":
-    from camera import Camera
+        def point_pair_to_line(p1, p2):
+            # Formula to get the line coefficients from two points
+            kdiv = (p1[:, [1]] - p2[:, [1]])
+            kdiv[kdiv == 0] = 1
+            k = (p1[:, [0]] - p2[:, [0]]) / kdiv
+            m = (p1[:, [1]] * p2[:, [0]] - p2[:, [1]] * p1[:, [0]]) / kdiv
+            return k, m
 
-    world_size = 5
+        frame = np.zeros(image_size)
+        for surface_idx in range(len(image_points)):
+            # Give the vertices of the quad variable names
+            # to make visualizing the edges a little clearer
+            a = image_points[[surface_idx], 0]
+            b = image_points[[surface_idx], 1]
+            c = image_points[[surface_idx], 2]
+            d = image_points[[surface_idx], 3]
 
-    # Some kind of horse shoe shape
-    thickness = 3
-    length = 1
-    origin = world_size // 2
-    cube_world = np.zeros((world_size + 1, world_size + 1, world_size + 1))
-    cube_world[
-        origin : origin + thickness + length,
-        origin : origin + thickness,
-        origin : origin + thickness,
-    ] = 6
-    cube_world[
-        origin : origin + thickness,
-        origin : origin + thickness + length,
-        origin : origin + thickness,
-    ] = 6
-    cube_world[
-        origin + length : origin + length + thickness,
-        origin : origin + thickness + length,
-        origin : origin + thickness,
-    ] = 6
+            # Extract a rectangle of interest region that is enveloping the quad
+            # and work on that instead in order to lower the amount of
+            # data shuffled around in each op
 
-    # cube_world[:] = 0
-    # cube_world[0,0,0] = 1
-    # Some interesting place to look at
-    object_center = np.average(np.argwhere(cube_world > 0), axis=0)
+            # TODO: Handle clipping better. Right now we're just trying to avoid
+            # crashing, but image points outside of the image frame should be
+            # handled more gracefully, i.e., take care of the portion
+            # of the quads that are within the frame as expected in a 3d world
+            min_y = np.clip(math.floor(
+                np.min(image_points[[surface_idx], :, 0])), 0, image_size[0])
+            max_y = np.clip(
+                math.ceil(np.max(image_points[[surface_idx], :, 0])), 0, image_size[0])
+            min_x = np.clip(math.floor(
+                np.min(image_points[[surface_idx], :, 1])), 0, image_size[1])
+            max_x = np.clip(math.ceil(np.max(image_points[[surface_idx], :, 1])), 0, image_size[1])
 
-    # Create a renderer that is to render the Camera cam in the np array cube_world
-    colors = {
-        2: curses.COLOR_BLUE,
-        3: curses.COLOR_CYAN,
-        4: curses.COLOR_GREEN,
-        5: curses.COLOR_MAGENTA,
-        6: curses.COLOR_RED,
-        7: curses.COLOR_YELLOW,
-        "border": curses.COLOR_CYAN,
-    }
-    r = Renderer(fps=30, colors=colors)
+            # Readjust the coordinate system to fit inside our smaller rectangle of interest
+            a[:, 0] -= min_y
+            b[:, 0] -= min_y
+            c[:, 0] -= min_y
+            d[:, 0] -= min_y
+            a[:, 1] -= min_x
+            b[:, 1] -= min_x
+            c[:, 1] -= min_x
+            d[:, 1] -= min_x
 
-    # Create a camera
-    cam_offset = 5
-    cam = Camera(r, x=-cam_offset, y=-cam_offset, z=-cam_offset)
-    move_size = 0.1
-    n_moves = 100
-    moves = (
-        [(move_size, 0, 0) for _ in range(n_moves)]
-        + [(0, move_size, 0) for _ in range(n_moves)]
-        + [(0, 0, move_size) for _ in range(n_moves)]
-        + [(0, 0, move_size) for _ in range(n_moves)]
-    )
+            # Create an y,x index grid to plug into our "quad fill" formula
+            coords = np.mgrid[: max_y - min_y, 0: max_x - min_x]
 
-    t1 = time.time()
-    for i in range(len(moves)):
-        # Move the camera in a circle-ish pattern to visualize the 3d
-        # information more clearly
-        cam.move(*moves[i])
+            # Paint the quad's inside
+            within_line_1 = (((coords[1] - a[:, 1]) * (b[:, 0] - a[:, 0]) -
+                             (coords[0] - a[:, 0]) * (b[:, 1] - a[:, 1])) >= 0)
+            within_line_2 = (((coords[1] - b[:, 1]) * (c[:, 0] - b[:, 0]) -
+                             (coords[0] - b[:, 0]) * (c[:, 1] - b[:, 1])) >= 0)
+            within_line_3 = (((coords[1] - c[:, 1]) * (d[:, 0] - c[:, 0]) -
+                             (coords[0] - c[:, 0]) * (d[:, 1] - c[:, 1])) >= 0)
+            within_line_4 = (((coords[1] - d[:, 1]) * (a[:, 0] - d[:, 0]) -
+                             (coords[0] - d[:, 0]) * (a[:, 1] - d[:, 1])) >= 0)
+            frame[min_y: max_y, min_x: max_x][within_line_1 & within_line_2 & 
+                                              within_line_3 & within_line_4] = values[surface_idx]
 
-        # Redirect the camera to look at the center of the object
-        cam.look_at(*object_center)
+            # Paint border
+            # Get coefficients of each quad's edge lines
+            ba_k, ba_m = point_pair_to_line(a, b)
+            cb_k, cb_m = point_pair_to_line(b, c)
+            dc_k, dc_m = point_pair_to_line(c, d)
+            ad_k, ad_m = point_pair_to_line(d, a)
+            
+            # Soem heuristic on how wide the line should be related to the area of the cell
+            area = (max_y - min_y) * (max_x - min_x)
+            lw = self.border_thickness * math.sqrt(area)
 
-        # Render the cube_world array as seen by cam
-        r.render(cube_world, cam)
+            # Paint all points that are within the quad and within lw of an edge 
+            frame[min_y: max_y, min_x: max_x][within_line_1 & within_line_2 &
+                                              within_line_3 & within_line_4 &
+                                              ((np.abs(ba_k * coords[1] + ba_m - coords[0]) < lw) |
+                                              (np.abs(cb_k * coords[1] + cb_m - coords[0]) < lw) |
+                                              (np.abs(dc_k * coords[1] + dc_m - coords[0]) < lw) |
+                                              (np.abs(ad_k * coords[1] + ad_m - coords[0]) < lw))] = self.border_value
 
-        # cam.move(x=0, y=3 * math.sin(i % 100 / 100 * math.pi * 2),
-        #         z=3 * math.cos(i % 100 / 100 * math.pi * 2))
-        # cam.rotate(pitch=0.1)
-
-    t2 = time.time()
-    exit_curses()
-    print(
-        f"Rendered {i} steps at resolution {os.get_terminal_size().lines, os.get_terminal_size().columns} in {t2 - t1} seconds"
-    )
+        return frame
 
 
-# TODO:
-# Fler backends
-# Terminal, cairo? blend2D? qt? drawsvg?
