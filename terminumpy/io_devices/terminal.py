@@ -10,9 +10,10 @@ from ..renderers.vector_renderer import VectorRenderer
 
 
 class Terminal(IODevice):
-    ''' An I/O device that outputs frame data by writing characters
-        to the terminal using the ncurses module
-    '''
+    """An I/O device that outputs frame data by writing characters
+    to the terminal using the ncurses module
+    """
+
     def __init__(self, colors={}, *args, **kwargs):
         self.suggested_renderer = VectorRenderer
         super(Terminal, self).__init__(*args, **kwargs)
@@ -33,10 +34,11 @@ class Terminal(IODevice):
             pair_idx = color_idx + 1
             curses.init_pair(pair_idx, 0, color_idx)
             color_to_pair_idx[color_idx] = pair_idx
-        if 'border' in colors:
+        if "border" in colors:
             colors[self.renderer.border_value] = curses.color_pair(
-                color_to_pair_idx[colors['border']])
-            del colors['border']
+                color_to_pair_idx[colors["border"]]
+            )
+            del colors["border"]
         else:
             colors[self.renderer.border_value] = curses.COLOR_CYAN
 
@@ -44,8 +46,10 @@ class Terminal(IODevice):
         class ColorDict(UserDict):
             def __missing__(self, key):
                 color_pair = curses.color_pair(
-                    color_to_pair_idx[(int(key)) % (curses.COLORS)])
+                    color_to_pair_idx[(int(key)) % (curses.COLORS)]
+                )
                 return color_pair
+
         self.colors = ColorDict()
         self.colors.update(
             {
@@ -53,18 +57,18 @@ class Terminal(IODevice):
                 for value, color in colors.items()
             }
         )
-            
+
     def get_resolution(self):
         # Return the _writable_ area of the terminal
         w, h = os.get_terminal_size()
         return (h - 1, w)
-    
+
     def _output_frame_data(self, frame_data, camera):
         # Paint points in terminal
         self.paint_points(frame_data)
 
     def paint_points(self, frame_data):
-        """ Paints characters into the terminal that with some
+        """Paints characters into the terminal that with some
             enthusiasm can be seen as representing the 3d view.
             This is done by printing strings of the space character
             that have their background color set to whatever color
@@ -87,13 +91,18 @@ class Terminal(IODevice):
         # character individually
         padded_frame_data = np.pad(frame_data, ((0, 0), (1, 0)), constant_values=-1)
         color_changes = np.argwhere(
-            padded_frame_data[:, 1:] - padded_frame_data[:, :-1])
+            padded_frame_data[:, 1:] - padded_frame_data[:, :-1]
+        )
         color_changes = zip(color_changes, color_changes[1:])
         for from_pos, to_pos in color_changes:
             value = frame_data[from_pos[0], from_pos[1]]
-            length = (to_pos[0] - from_pos[0]) * frame_data.shape[1] + (to_pos[1] - from_pos[1])
-            self.stdscr.addstr(from_pos[0], from_pos[1], " " * length, self.colors[value])
-        
+            length = (to_pos[0] - from_pos[0]) * frame_data.shape[1] + (
+                to_pos[1] - from_pos[1]
+            )
+            self.stdscr.addstr(
+                from_pos[0], from_pos[1], " " * length, self.colors[value]
+            )
+
         # Optional FPS limiter here as all calculations are done
         self.limit_fps()
 

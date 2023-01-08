@@ -93,7 +93,6 @@ class Camera:
                 world_array (np.array): A numpy array of shape (3, N)
                     holding the points in the world coordinate system
                     that are to be converted to the camera coordinate system.
-
         """
         # Convert to homogenous coordinates
         world_points = np.vstack((world_points, np.ones(world_points.shape[1])))

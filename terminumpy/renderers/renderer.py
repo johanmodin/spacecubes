@@ -62,8 +62,8 @@ class Renderer(ABC):
 
     @abstractmethod
     def render(self, world_array, camera, image_size):
-        ''' Renders a numpy world array from the perspective
-            of camera with the method '''
+        """Renders a numpy world array from the perspective
+        of camera with the method"""
         pass
 
     def render_surfaces(self, world_array, camera):
@@ -78,15 +78,15 @@ class Renderer(ABC):
                 with regards to world_array
 
         Returns a dict where each key is a dimension and a direction and the corresponding
-        values are dicts with two keys: 'coordinates' and 'values'. 
-        Under the coordinates key are t he surface quads that have the 
-        key's dimension as its constant dimension and the key's direction as 
-        its "outer" direction. E.g., the key (0, -1, 0) holds all surface 
-        quads that make up the surfaces in the negative y direction if the 
-        coordinates are ordered as (x, y, z). The surfaces are numpy arrays 
+        values are dicts with two keys: 'coordinates' and 'values'.
+        Under the coordinates key are t he surface quads that have the
+        key's dimension as its constant dimension and the key's direction as
+        its "outer" direction. E.g., the key (0, -1, 0) holds all surface
+        quads that make up the surfaces in the negative y direction if the
+        coordinates are ordered as (x, y, z). The surfaces are numpy arrays
         of sets of four points that make up the quad defining a cell's surface
         in one dimension and direction. The 'values' key holds the corresponding cell
-        values as defined in the world array. 
+        values as defined in the world array.
         """
         # Below is the algorithm for finding surfaces in the numpy array world
         # Essentially, we pad the world with a zeros in each dimension
@@ -136,16 +136,15 @@ class Renderer(ABC):
         z_surfaces_pos_w = self.cube2surface(z_outer_points_pos_w, 2)
         z_surfaces_neg_w = self.cube2surface(z_outer_points_neg_w, 2)
 
-        surface_data = {(1, 0, 0): {'world_coordinates': x_surfaces_pos_w, 'values': x_pos_values},
-                        (-1, 0, 0): {'world_coordinates': x_surfaces_neg_w, 'values': x_neg_values},
-                        (0, 1, 0): {'world_coordinates': y_surfaces_pos_w, 'values': y_pos_values},
-                        (0, -1, 0): {'world_coordinates': y_surfaces_neg_w, 'values': y_neg_values},
-                        (0, 0, 1): {'world_coordinates': z_surfaces_pos_w, 'values': z_pos_values},
-                        (0, 0, -1): {'world_coordinates': z_surfaces_neg_w, 'values': z_neg_values},
-                        }
+        surface_data = {
+            (1, 0, 0): {"world_coordinates": x_surfaces_pos_w, "values": x_pos_values},
+            (-1, 0, 0): {"world_coordinates": x_surfaces_neg_w, "values": x_neg_values},
+            (0, 1, 0): {"world_coordinates": y_surfaces_pos_w, "values": y_pos_values},
+            (0, -1, 0): {"world_coordinates": y_surfaces_neg_w, "values": y_neg_values},
+            (0, 0, 1): {"world_coordinates": z_surfaces_pos_w, "values": z_pos_values},
+            (0, 0, -1): {"world_coordinates": z_surfaces_neg_w, "values": z_neg_values},
+        }
         return surface_data
-
-
 
     def project_points(self, points, camera, image_size):
         """Projects points from camera coordinate system (XYZ) to
@@ -171,4 +170,3 @@ class Renderer(ABC):
         # Remove the last column
         points_im = h_points_i[:2, :]
         return points_im, visible_indices
-
