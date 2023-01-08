@@ -30,7 +30,8 @@ class Camera:
         self.z = z
 
         # Create a quaternion from the initial roll, pitch and yaw
-        self.Q = self.quat_from_ypr(yaw=yaw, pitch=pitch, roll=roll)
+        #self.Q = self.quat_from_ypr(yaw=yaw, pitch=pitch, roll=roll)
+        self.Q = Quaternion(1, 0, 0, 0)
 
         # Generate the camera matrices
         self.regenerate_extrinsic_matrix()
