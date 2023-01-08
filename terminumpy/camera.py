@@ -104,10 +104,10 @@ class Camera:
 
     def look_at(self, x, y, z):
         """Rotates the camera to look at a world position specified as (x, y, z)"""
-
+        # TODO: Handle this cleaner
         def normalize(v, tolerance=0.00001):
             mag2 = sum(n * n for n in v)
-            if abs(mag2 - 1.0) > tolerance:
+            if mag2 != 0 and abs(mag2 - 1.0) > tolerance:
                 mag = math.sqrt(mag2)
                 v = tuple(n / mag for n in v)
             return v
@@ -118,7 +118,11 @@ class Camera:
         fwd_v = normalize(dst - src)
         fwd = np.array([0, 0, 1])
         d = np.dot(fwd, fwd_v)
-        rot = math.acos(d)
+        if abs(d) > 1:
+            # Maybe warn
+            rot = 0
+        else:
+            rot = math.acos(d)
         rot_axis = np.cross(fwd, fwd_v)
         rot_axis = normalize(rot_axis)
 
