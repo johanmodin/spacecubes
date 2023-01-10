@@ -37,6 +37,11 @@ class IODevice(ABC):
         raise NotImplementedError(
             f'This function does not yet have an implementation in {self.__class__.__name__}')
 
+    def close(self):
+        """ Performs a graceful shutdown of the IODevice """
+        raise NotImplementedError(
+            f'This function does not yet have an implementation in {self.__class__.__name__}')
+
     def show(self, world_array, camera):
         """Displays the world_array from the perspective of camera.
 

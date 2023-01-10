@@ -68,6 +68,9 @@ class Terminal(IODevice):
         # Paint points in terminal
         self.paint_points(frame_data)
 
+    def close(self):
+        curses.endwin()
+
     def paint_points(self, frame_data):
         """Paints characters into the terminal that with some
             enthusiasm can be seen as representing the 3d view.
