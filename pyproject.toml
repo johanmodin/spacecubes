@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "spacecubes"
+version = "0.3.0"
+description = "Simple rendering of three-dimensional NumPy arrays"
+authors = ["Johan Modin <johan.modin92@gmail.com>"]
+license = "Apache-2.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "^1.24"
+pyquaternion = "^0.9.9"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

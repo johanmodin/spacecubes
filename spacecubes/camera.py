@@ -24,18 +24,18 @@ class Camera:
         yaw (float): Initial camera yaw
     """
 
-    def __init__(self, renderer, x=0, y=0, z=0, roll=0, pitch=0, yaw=0):
+    def __init__(self, x=0, y=0, z=0, roll=0, pitch=0, yaw=0):
         self.x = x
         self.y = y
         self.z = z
 
         # Create a quaternion from the initial roll, pitch and yaw
-        self.Q = self.quat_from_ypr(yaw=yaw, pitch=pitch, roll=roll)
+        #self.Q = self.quat_from_ypr(yaw=yaw, pitch=pitch, roll=roll)
+        self.Q = Quaternion(1, 0, 0, 0)
 
         # Generate the camera matrices
         self.regenerate_extrinsic_matrix()
         self.regenerate_intrinsic_matrix()
-        self.panel = renderer.create_camera_panel()
 
     def quat_from_ypr(self, yaw=0, pitch=0, roll=0):
         """Create a quaternion from yaw, pitch and roll given in radians"""
@@ -94,7 +94,6 @@ class Camera:
                 world_array (np.array): A numpy array of shape (3, N)
                     holding the points in the world coordinate system
                     that are to be converted to the camera coordinate system.
-
         """
         # Convert to homogenous coordinates
         world_points = np.vstack((world_points, np.ones(world_points.shape[1])))
@@ -105,10 +104,10 @@ class Camera:
 
     def look_at(self, x, y, z):
         """Rotates the camera to look at a world position specified as (x, y, z)"""
-
+        # TODO: Handle this cleaner
         def normalize(v, tolerance=0.00001):
             mag2 = sum(n * n for n in v)
-            if abs(mag2 - 1.0) > tolerance:
+            if mag2 != 0 and abs(mag2 - 1.0) > tolerance:
                 mag = math.sqrt(mag2)
                 v = tuple(n / mag for n in v)
             return v
@@ -119,7 +118,11 @@ class Camera:
         fwd_v = normalize(dst - src)
         fwd = np.array([0, 0, 1])
         d = np.dot(fwd, fwd_v)
-        rot = math.acos(d)
+        if abs(d) > 1:
+            # Maybe warn
+            rot = 0
+        else:
+            rot = math.acos(d)
         rot_axis = np.cross(fwd, fwd_v)
         rot_axis = normalize(rot_axis)
 
