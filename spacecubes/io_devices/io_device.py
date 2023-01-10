@@ -6,11 +6,13 @@ from abc import ABC, abstractmethod
 
 class IODevice(ABC):
     def __init__(self, renderer=None, fps=None, *args, **kwargs):
-        """Create an OutputDevice.
+        """Create an IODevice.
 
         Args:
-            resolution (int, int): A (width, height) tuple specifying
-                the resolution of the rendered output
+            renderer (Renderer): The renderer used to produce
+                frames for this IODevice to show
+            fps (float): A value specifying the maximum number
+                of frames per second to show.
         """
         super(IODevice, self).__init__(*args, **kwargs)
         if renderer is None:
@@ -29,6 +31,11 @@ class IODevice(ABC):
     def _output_frame_data(frame_data, camera):
         """Outputs frame data as defined by the specific IODevice"""
         pass
+
+    def get_input(self):
+        """ Returns input received by the device, e.g., key strokes"""
+        raise NotImplementedError(
+            f'This function does not yet have an implementation in {self.__class__.__name__}')
 
     def show(self, world_array, camera):
         """Displays the world_array from the perspective of camera.

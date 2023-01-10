@@ -23,13 +23,16 @@ class VectorRenderer(Renderer):
                 to get the translation and rotation of the camera
                 with regards to world_array
             image_size ((int, int)): A tuple of two ints representing the
-                desired (height, width) of the output numpy array.
+                desired (height, width) of the output numpy array/image.
+
+        Returns an np array shaped like image_size that represents the scene
+            as seen by the camera.
         """
 
         # Get world coordinate system surfaces from the render-function of the parent Renderer
-        surfaces = self.render_surfaces(world_array, camera)
+        surfaces = self.points_to_surfaces(world_array)
 
-        # Project the world points to the image
+        # Project the world points onto the image
         for surface_direction in surfaces:
             (
                 surfaces[surface_direction]["image_coordinates"],
@@ -37,6 +40,13 @@ class VectorRenderer(Renderer):
             ) = self.world_points_to_image_points(
                 surfaces[surface_direction]["world_coordinates"], camera, image_size
             )
+            
+            # Only retain surfaces that have any point infront of the camera
+            visible_indices_per_surface = np.reshape(visible_indices, (len(surfaces[surface_direction]["image_coordinates"]), 4))
+            retained_surface_indices = np.all(visible_indices_per_surface, axis=1)
+            surfaces[surface_direction]["image_coordinates"] = surfaces[surface_direction]["image_coordinates"][retained_surface_indices]
+            surfaces[surface_direction]["world_coordinates"] = surfaces[surface_direction]["world_coordinates"][retained_surface_indices]
+            surfaces[surface_direction]["values"] = surfaces[surface_direction]["values"][retained_surface_indices]
 
         # Reorder y-axis elements to align them with the orders of other axes
         surfaces[(0, 1, 0)]["image_coordinates"] = np.take(
@@ -46,6 +56,8 @@ class VectorRenderer(Renderer):
             surfaces[(0, -1, 0)]["image_coordinates"], np.array([3, 1, 2, 0]), axis=1
         )
 
+        # Batch preprocess position differences to allow
+        # determining surface corner order in a vectorized way 
         camera_position = np.array([[camera.x, camera.y, camera.z]])
         pos_diffs = {}
         positive_pos_along_surface_axis = {}
@@ -57,8 +69,8 @@ class VectorRenderer(Renderer):
                 pos_diffs[surf_dir][:, dimension] >= 0
             )
 
-        # Remove the surface direction key and concatenate everything into bigger
-        # piles of data to make handling it a bit easier
+        # Remove the surface direction key and concatenate everything
+        # for easier handling
         image_points = np.concatenate(
             [surfaces[d]["image_coordinates"] for d in surfaces]
         )
@@ -83,6 +95,8 @@ class VectorRenderer(Renderer):
 
         # Reorder the surface points so that we can form polygons of all quads
         # by using the vectors (b - a), (c - b), (d - c) and (a - d)
+        # Depending on the sign of the position difference calculated above, different
+        # orders are used
         if any(image_surface_order):
             image_points[image_surface_order] = image_points[image_surface_order][
                 :, [2, 0, 1, 3], :
@@ -94,7 +108,7 @@ class VectorRenderer(Renderer):
             ]
 
         def point_pair_to_line(p1, p2):
-            # Formula to get the line coefficients from two points
+            # Formula to get the line coefficients from two (potentially sets of) points
             kdiv = p1[:, [1]] - p2[:, [1]]
             kdiv[kdiv == 0] = 1
             k = (p1[:, [0]] - p2[:, [0]]) / kdiv
@@ -110,26 +124,10 @@ class VectorRenderer(Renderer):
             c = image_points[[surface_idx], 2]
             d = image_points[[surface_idx], 3]
 
-            # Extract a rectangle of interest region that is enveloping the quad
-            # and work on that instead in order to lower the amount of
-            # data shuffled around in each op
-
-            # TODO: Handle clipping better. Right now we're just trying to avoid
-            # crashing, but image points outside of the image frame should be
-            # handled more gracefully, i.e., take care of the portion
-            # of the quads that are within the frame as expected in a 3d world
-            min_y = np.clip(
-                math.floor(np.min(image_points[[surface_idx], :, 0])), 0, image_size[0]
-            )
-            max_y = np.clip(
-                math.ceil(np.max(image_points[[surface_idx], :, 0])), 0, image_size[0]
-            )
-            min_x = np.clip(
-                math.floor(np.min(image_points[[surface_idx], :, 1])), 0, image_size[1]
-            )
-            max_x = np.clip(
-                math.ceil(np.max(image_points[[surface_idx], :, 1])), 0, image_size[1]
-            )
+            min_y = np.clip(math.floor(np.min(image_points[[surface_idx], :, 0])), 0, image_size[0] - 2)
+            max_y = np.clip(math.ceil(np.max(image_points[[surface_idx], :, 0])), 0, image_size[0] - 1)
+            min_x = np.clip(math.floor(np.min(image_points[[surface_idx], :, 1])), 0, image_size[1] - 2)
+            max_x = np.clip(math.ceil(np.max(image_points[[surface_idx], :, 1])), 0, image_size[1] - 1)
 
             # Readjust the coordinate system to fit inside our smaller rectangle of interest
             a[:, 0] -= min_y
@@ -172,7 +170,7 @@ class VectorRenderer(Renderer):
             dc_k, dc_m = point_pair_to_line(c, d)
             ad_k, ad_m = point_pair_to_line(d, a)
 
-            # Soem heuristic on how wide the line should be related to the area of the cell
+            # Some heuristic on how wide the line should be related to the area of the cell
             area = (max_y - min_y) * (max_x - min_x)
             lw = self.border_thickness * math.sqrt(area)
 

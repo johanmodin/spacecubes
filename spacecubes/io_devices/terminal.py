@@ -59,7 +59,8 @@ class Terminal(IODevice):
         )
 
     def get_resolution(self):
-        # Return the _writable_ area of the terminal
+        # Return the writable area of the terminal, which
+        # curiously does not include the last row
         w, h = os.get_terminal_size()
         return (h - 1, w)
 
@@ -75,7 +76,7 @@ class Terminal(IODevice):
             is assigned to the value of the pixel. This is done to
             fill the entire character cell and provide a better image.
 
-            For high resolutions, this can get pretty slow.
+            This can get pretty slow at high resolutions.
 
         Args:
             frame_data (np.array): The (h, w) numpy array to be displayed
@@ -106,6 +107,5 @@ class Terminal(IODevice):
         # Optional FPS limiter here as all calculations are done
         self.limit_fps()
 
-        # Draw a box around the screen because it's neat and refresh the panel's contents
-        self.stdscr.box()
+        # Refresh the window's contents
         self.stdscr.refresh()

@@ -66,16 +66,8 @@ class Renderer(ABC):
         of camera with the method"""
         pass
 
-    def render_surfaces(self, world_array, camera):
-        """Render a scene to the output device.
-
-        Args:
-            world_array (np.array): A numpy array which
-                specifies the 3D world in which the camera's perspective
-                is rendered.
-            camera (Camera): A Camera object that allows the render-function
-                to get the translation and rotation of the camera
-                with regards to world_array
+    def points_to_surfaces(self, world_array):
+        """ Create world surfaces from world points
 
         Returns a dict where each key is a dimension and a direction and the corresponding
         values are dicts with two keys: 'coordinates' and 'values'.
@@ -136,6 +128,8 @@ class Renderer(ABC):
         z_surfaces_pos_w = self.cube2surface(z_outer_points_pos_w, 2)
         z_surfaces_neg_w = self.cube2surface(z_outer_points_neg_w, 2)
 
+        # Make the data somewhat easier to interpret by putting it in a dict
+        # where each axis positive and negative direction have their own keys
         surface_data = {
             (1, 0, 0): {"world_coordinates": x_surfaces_pos_w, "values": x_pos_values},
             (-1, 0, 0): {"world_coordinates": x_surfaces_neg_w, "values": x_neg_values},
@@ -165,7 +159,7 @@ class Renderer(ABC):
         h_points_i[1, :] = h_points_i[1, :] / h_points_i[2, :]
 
         # Find points behind the camera
-        visible_indices = np.where(h_points_i[2, :] >= 0)
+        visible_indices = h_points_i[2, :] >= 0
 
         # Remove the last column
         points_im = h_points_i[:2, :]
