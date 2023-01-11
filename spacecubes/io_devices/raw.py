@@ -10,7 +10,7 @@ from .io_device import IODevice
 
 class Raw(IODevice):
     """An I/O device that returns the raw numpy frame
-       data, as opposed to showing it in some visualized fashion
+    data, as opposed to showing it in some visualized fashion
     """
 
     def __init__(self, resolution=(600, 800), colors={}, *args, **kwargs):
@@ -44,8 +44,10 @@ class Raw(IODevice):
 
         if replace_values_with_colors:
             # Replace the values image frames' values with BGR colors
-            # by the user-supplied value -> color mapping 
-            frame_data = replace_values_with_bgr(frame_data, self.colors).astype(np.uint8)
+            # by the user-supplied value -> color mapping
+            frame_data = replace_values_with_bgr(frame_data, self.colors).astype(
+                np.uint8
+            )
 
         # Optional FPS limiter here as all calculations are done
         self.limit_fps()

@@ -30,7 +30,7 @@ class Camera:
         self.z = z
 
         # Create a quaternion from the initial roll, pitch and yaw
-        #self.Q = self.quat_from_ypr(yaw=yaw, pitch=pitch, roll=roll)
+        # self.Q = self.quat_from_ypr(yaw=yaw, pitch=pitch, roll=roll)
         self.Q = Quaternion(1, 0, 0, 0)
 
         # Generate the camera matrices
@@ -60,11 +60,17 @@ class Camera:
         R[:3, :3] = self.Q.rotation_matrix
         self.extrinsic_matrix = self._generate_extrinsic_matrix(T, R)
 
-    def _regenerate_intrinsic_matrix(self, focal_length=1, skew_factor=0, offset_x=0.5, offset_y=0.5, aspect_ratio=1):
+    def _regenerate_intrinsic_matrix(
+        self, focal_length=1, skew_factor=0, offset_x=0.5, offset_y=0.5, aspect_ratio=1
+    ):
         """Set the camera's intrinsic matrix"""
         self.intrinsic_matrix = self._generate_intrinsic_matrix(
-            focal_length, skew_factor=skew_factor, offset_x=offset_x, 
-            offset_y=offset_y, aspect_ratio=aspect_ratio)
+            focal_length,
+            skew_factor=skew_factor,
+            offset_x=offset_x,
+            offset_y=offset_y,
+            aspect_ratio=aspect_ratio,
+        )
 
     def _generate_extrinsic_matrix(self, T, R):
         """Calculates the essential (E) matrix"""
@@ -114,8 +120,8 @@ class Camera:
 
     def look_at(self, x, y, z):
         """Rotates the camera to look at a world position specified as (x, y, z)
-        
-           Find a quaternion that has the axis specified by the target and camera position    
+
+        Find a quaternion that has the axis specified by the target and camera position
         """
         src = np.array([self.x, self.y, self.z], dtype=np.float64)
         dst = np.array([x, y, z], dtype=np.float64)
@@ -129,7 +135,7 @@ class Camera:
         else:
             rot = math.acos(d)
         rot_axis = np.cross(fwd, fwd_v)
-        rot_axis = rot_axis / math.sqrt(np.sum(rot_axis ** 2))
+        rot_axis = rot_axis / math.sqrt(np.sum(rot_axis**2))
         s = math.sin(rot * 0.5)
         self.Q = Quaternion(
             w=math.cos(rot * 0.5),
@@ -150,15 +156,21 @@ class Camera:
         """Translates the camera in camera coordinates"""
         # Calculate the i-component in the world frame
         world_forward = [0, 0, 1]
-        dxf, dyf, dzf = (self.Q.unit * np.array([0, *world_forward]) * self.Q.unit.conjugate.unit).axis * forward
+        dxf, dyf, dzf = (
+            self.Q.unit * np.array([0, *world_forward]) * self.Q.unit.conjugate.unit
+        ).axis * forward
 
         # Calculate the j-component in the world frame
         world_side = [0, 1, 0]
-        dxs, dys, dzs = (self.Q.unit * np.array([0, *world_side]) * self.Q.unit.conjugate.unit).axis * right
+        dxs, dys, dzs = (
+            self.Q.unit * np.array([0, *world_side]) * self.Q.unit.conjugate.unit
+        ).axis * right
 
         # Calculate the k-component in the world frame
         world_up = [-1, 0, 0]
-        dxu, dyu, dzu = (self.Q.unit * np.array([0, *world_up]) * self.Q.unit.conjugate.unit).axis * up
+        dxu, dyu, dzu = (
+            self.Q.unit * np.array([0, *world_up]) * self.Q.unit.conjugate.unit
+        ).axis * up
 
         dx = dxf + dxs + dxu
         dy = dyf + dys + dyu
@@ -173,4 +185,3 @@ class Camera:
         """Rotates the camera the given amount of roll, pitch and yaw"""
         self.Q *= self._quaternion_from_yaw_pitch_roll(roll=roll, pitch=pitch, yaw=yaw)
         self._regenerate_extrinsic_matrix()
-

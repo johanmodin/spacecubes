@@ -10,7 +10,7 @@ from .io_device import IODevice
 
 class OpenCV(IODevice):
     """An I/O device that outputs frame data through the
-       OpenCV imshow functionality
+    OpenCV imshow functionality
     """
 
     def __init__(self, resolution=(600, 800), colors={}, *args, **kwargs):
@@ -26,7 +26,7 @@ class OpenCV(IODevice):
         self.colors = {0: (0, 0, 0)}
         self.colors.update(colors.items())
 
-        self.window_name = 'spacecubes'
+        self.window_name = "spacecubes"
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
     def get_resolution(self):
@@ -39,7 +39,7 @@ class OpenCV(IODevice):
         self.update_window(frame_data)
 
     def update_window(self, frame_data):
-        """ Updates the OpenCV window with new frame data.
+        """Updates the OpenCV window with new frame data.
 
         Args:
             frame_data (np.array): The (h, w) numpy array to be displayed
@@ -53,9 +53,9 @@ class OpenCV(IODevice):
             vs = v[sidx]
             idx = np.searchsorted(ks, frame)
             return vs[idx]
-        
+
         # Replace the values image frames' values with BGR colors
-        # by the user-supplied value -> color mapping 
+        # by the user-supplied value -> color mapping
         out = replace_values_with_bgr(frame_data, self.colors).astype(np.uint8)
 
         # Optional FPS limiter here as all calculations are done

@@ -2,6 +2,7 @@ import itertools
 import numpy as np
 import math
 
+
 class Renderer:
     def __init__(
         self,
@@ -61,7 +62,7 @@ class Renderer:
         return surfaces
 
     def points_to_surfaces(self, world_array):
-        """ Create world surfaces from world points
+        """Create world surfaces from world points
 
         Returns a dict where each key is a dimension and a direction and the corresponding
         values are dicts with two keys: 'coordinates' and 'values'.
@@ -195,12 +196,19 @@ class Renderer:
 
             # Only retain surfaces that have any point infront of the camera
             visible_indices_per_surface = np.reshape(
-                visible_indices, (len(surfaces[surface_direction]["image_coordinates"]), 4))
-            retained_surface_indices = np.all(
-                visible_indices_per_surface, axis=1)
-            surfaces[surface_direction]["image_coordinates"] = surfaces[surface_direction]["image_coordinates"][retained_surface_indices]
-            surfaces[surface_direction]["world_coordinates"] = surfaces[surface_direction]["world_coordinates"][retained_surface_indices]
-            surfaces[surface_direction]["values"] = surfaces[surface_direction]["values"][retained_surface_indices]
+                visible_indices,
+                (len(surfaces[surface_direction]["image_coordinates"]), 4),
+            )
+            retained_surface_indices = np.all(visible_indices_per_surface, axis=1)
+            surfaces[surface_direction]["image_coordinates"] = surfaces[
+                surface_direction
+            ]["image_coordinates"][retained_surface_indices]
+            surfaces[surface_direction]["world_coordinates"] = surfaces[
+                surface_direction
+            ]["world_coordinates"][retained_surface_indices]
+            surfaces[surface_direction]["values"] = surfaces[surface_direction][
+                "values"
+            ][retained_surface_indices]
 
         # Reorder y-axis elements to align them with the orders of other axes
         surfaces[(0, 1, 0)]["image_coordinates"] = np.take(
@@ -217,8 +225,7 @@ class Renderer:
         positive_pos_along_surface_axis = {}
         for surf_dir in surfaces:
             world_points = surfaces[surf_dir]["world_coordinates"]
-            pos_diffs[surf_dir] = np.mean(
-                camera_position - world_points, axis=1)
+            pos_diffs[surf_dir] = np.mean(camera_position - world_points, axis=1)
             dimension = np.argmax(np.abs(surf_dir))
             positive_pos_along_surface_axis[surf_dir] = (
                 pos_diffs[surf_dir][:, dimension] >= 0
@@ -279,14 +286,26 @@ class Renderer:
             c = image_points[[surface_idx], 2]
             d = image_points[[surface_idx], 3]
 
-            min_y = np.clip(math.floor(
-                np.min(image_points[[surface_idx], :, 0])), 0, image_size[0] - 2)
+            min_y = np.clip(
+                math.floor(np.min(image_points[[surface_idx], :, 0])),
+                0,
+                image_size[0] - 2,
+            )
             max_y = np.clip(
-                math.ceil(np.max(image_points[[surface_idx], :, 0])), 0, image_size[0] - 1)
-            min_x = np.clip(math.floor(
-                np.min(image_points[[surface_idx], :, 1])), 0, image_size[1] - 2)
+                math.ceil(np.max(image_points[[surface_idx], :, 0])),
+                0,
+                image_size[0] - 1,
+            )
+            min_x = np.clip(
+                math.floor(np.min(image_points[[surface_idx], :, 1])),
+                0,
+                image_size[1] - 2,
+            )
             max_x = np.clip(
-                math.ceil(np.max(image_points[[surface_idx], :, 1])), 0, image_size[1] - 1)
+                math.ceil(np.max(image_points[[surface_idx], :, 1])),
+                0,
+                image_size[1] - 1,
+            )
 
             # Readjust the coordinate system to fit inside our smaller rectangle of interest
             a[:, 0] -= min_y
@@ -299,7 +318,7 @@ class Renderer:
             d[:, 1] -= min_x
 
             # Create an y,x index grid to plug into our "quad fill" formula
-            coords = np.mgrid[: max_y - min_y, 0: max_x - min_x]
+            coords = np.mgrid[: max_y - min_y, 0 : max_x - min_x]
 
             # Paint the quad's inside
             within_line_1 = (

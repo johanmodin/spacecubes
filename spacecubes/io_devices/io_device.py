@@ -35,14 +35,16 @@ class IODevice(ABC):
         pass
 
     def get_input(self):
-        """ Returns input received by the device, e.g., key strokes"""
+        """Returns input received by the device, e.g., key strokes"""
         raise NotImplementedError(
-            f'This function does not yet have an implementation in {self.__class__.__name__}')
+            f"This function does not yet have an implementation in {self.__class__.__name__}"
+        )
 
     def close(self):
-        """ Performs a graceful shutdown of the IODevice """
+        """Performs a graceful shutdown of the IODevice"""
         raise NotImplementedError(
-            f'This function does not yet have an implementation in {self.__class__.__name__}')
+            f"This function does not yet have an implementation in {self.__class__.__name__}"
+        )
 
     def show(self, world_array, camera):
         """Displays the world_array from the perspective of camera.
@@ -52,9 +54,14 @@ class IODevice(ABC):
                 with non-zero elements that define the world to display
             camera (Camera): A Camera object which defines the perspective
                 to use when displaying the world
+
+        Optionally returns an output from the _output_frame_data function.
         """
         frame_data = self.renderer.render(world_array, camera, self.get_resolution())
-        self._output_frame_data(frame_data)
+
+        # TODO: Why the result of the output function is returned is not very intuitive
+        # Should let the Raw class return its data in another way
+        return self._output_frame_data(frame_data)
 
     def limit_fps(self):
         """Sleep as needed to not exceed the frame rate of self.fps"""
