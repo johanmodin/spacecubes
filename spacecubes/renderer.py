@@ -1,9 +1,8 @@
-from abc import ABC, abstractmethod
 import itertools
 import numpy as np
 import math
 
-class Renderer(ABC):
+class Renderer:
     def __init__(
         self,
         show_border=True,
@@ -36,7 +35,7 @@ class Renderer(ABC):
         # which we will need to temporarily undo
         original_surface_shape = world_points.shape[:-1]
         world_points = world_points.reshape((-1, 3))
-        camera_points = camera.world_to_camera_coordinates(world_points.T)
+        camera_points = camera._world_to_camera_coordinates(world_points.T)
 
         # Project the points into the image frame
         h, w = image_size
@@ -60,12 +59,6 @@ class Renderer(ABC):
         )
         surfaces = surface_corner_offsets + points[:, np.newaxis, :]
         return surfaces
-
-    @abstractmethod
-    def render(self, world_array, camera, image_size):
-        """Renders a numpy world array from the perspective
-        of camera with the method"""
-        pass
 
     def points_to_surfaces(self, world_array):
         """ Create world surfaces from world points
@@ -184,6 +177,9 @@ class Renderer(ABC):
             as seen by the camera.
         """
         # TODO: Allow a list of objects (np arrays) to be rendered, each with world position and rotation
+
+        # Adjust camera to image resolution aspect ratio
+        camera._regenerate_intrinsic_matrix(aspect_ratio=image_size[0] / image_size[1])
 
         # Get world coordinate system surfaces from the render-function of the parent Renderer
         surfaces = self.points_to_surfaces(world_array)

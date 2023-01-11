@@ -6,7 +6,6 @@ import numpy as np
 import os
 
 from .io_device import IODevice
-from ..renderer import Renderer
 
 
 class Terminal(IODevice):
@@ -63,7 +62,7 @@ class Terminal(IODevice):
         w, h = os.get_terminal_size()
         return (h - 1, w)
 
-    def _output_frame_data(self, frame_data, camera):
+    def _output_frame_data(self, frame_data):
         # Paint points in terminal
         self.paint_points(frame_data)
 

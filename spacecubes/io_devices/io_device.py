@@ -54,7 +54,7 @@ class IODevice(ABC):
                 to use when displaying the world
         """
         frame_data = self.renderer.render(world_array, camera, self.get_resolution())
-        self._output_frame_data(frame_data, camera)
+        self._output_frame_data(frame_data)
 
     def limit_fps(self):
         """Sleep as needed to not exceed the frame rate of self.fps"""
