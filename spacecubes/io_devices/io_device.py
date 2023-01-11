@@ -3,6 +3,8 @@ import sys
 import time
 from abc import ABC, abstractmethod
 
+from ..renderer import Renderer
+
 
 class IODevice(ABC):
     def __init__(self, renderer=None, fps=None, *args, **kwargs):
@@ -16,7 +18,7 @@ class IODevice(ABC):
         """
         super(IODevice, self).__init__(*args, **kwargs)
         if renderer is None:
-            self.renderer = self.suggested_renderer()
+            self.renderer = Renderer()
         else:
             self.renderer = renderer
         self.fps = fps

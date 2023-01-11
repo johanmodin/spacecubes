@@ -6,7 +6,7 @@ import numpy as np
 import os
 
 from .io_device import IODevice
-from ..renderers.vector_renderer import VectorRenderer
+from ..renderer import Renderer
 
 
 class Terminal(IODevice):
@@ -15,7 +15,6 @@ class Terminal(IODevice):
     """
 
     def __init__(self, colors={}, *args, **kwargs):
-        self.suggested_renderer = VectorRenderer
         super(Terminal, self).__init__(*args, **kwargs)
 
         # Curses setup

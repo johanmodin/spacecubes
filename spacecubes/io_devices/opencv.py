@@ -6,7 +6,6 @@ import cv2
 from zlib import crc32
 
 from .io_device import IODevice
-from ..renderers.vector_renderer import VectorRenderer
 
 
 class OpenCV(IODevice):
@@ -15,7 +14,6 @@ class OpenCV(IODevice):
     """
 
     def __init__(self, resolution=(600, 800), colors={}, *args, **kwargs):
-        self.suggested_renderer = VectorRenderer
         super(OpenCV, self).__init__(*args, **kwargs)
         self.resolution = resolution
 
