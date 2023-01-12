@@ -126,7 +126,7 @@ class Camera:
         src = np.array([self.x, self.y, self.z], dtype=np.float64)
         dst = np.array([x, y, z], dtype=np.float64)
 
-        fwd_v = (dst - src) / math.sqrt(np.sum((src - dst) ** 2))
+        fwd_v = (dst - src) / math.sqrt(np.sum((dst - src) ** 2))
         fwd = np.array([0, 0, 1])
         d = np.dot(fwd, fwd_v)
         if abs(d) > 1:

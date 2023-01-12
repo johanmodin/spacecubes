@@ -1,9 +1,5 @@
-from collections import UserDict
-
 import numpy as np
-import os
 import cv2
-from zlib import crc32
 
 from .io_device import IODevice
 

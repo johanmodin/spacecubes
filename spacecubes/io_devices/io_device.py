@@ -1,5 +1,3 @@
-import os
-import sys
 import time
 from abc import ABC, abstractmethod
 
@@ -31,7 +29,10 @@ class IODevice(ABC):
 
     @abstractmethod
     def _output_frame_data(frame_data, camera):
-        """Outputs frame data as defined by the specific IODevice"""
+        """Outputs frame data as defined by the specific IODevice and/or returns
+           data related to the frame.
+        
+        """
         pass
 
     def get_input(self):
@@ -46,7 +47,7 @@ class IODevice(ABC):
             f"This function does not yet have an implementation in {self.__class__.__name__}"
         )
 
-    def show(self, world_array, camera):
+    def render(self, world_array, camera):
         """Displays the world_array from the perspective of camera.
 
         Args:
@@ -58,9 +59,6 @@ class IODevice(ABC):
         Optionally returns an output from the _output_frame_data function.
         """
         frame_data = self.renderer.render(world_array, camera, self.get_resolution())
-
-        # TODO: Why the result of the output function is returned is not very intuitive
-        # Should let the Raw class return its data in another way
         return self._output_frame_data(frame_data)
 
     def limit_fps(self):
