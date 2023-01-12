@@ -19,12 +19,9 @@ class Camera:
         x (float): Initial world x position of camera
         y (float): Initial world y position of camera
         z (float): Initial world z position of camera
-        roll (float): Initial camera roll
-        pitch (float): Initial camera pitch
-        yaw (float): Initial camera yaw
     """
 
-    def __init__(self, x=0, y=0, z=0, roll=0, pitch=0, yaw=0):
+    def __init__(self, x=0, y=0, z=0):
         self.x = x
         self.y = y
         self.z = z
