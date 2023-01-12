@@ -18,7 +18,7 @@ class Renderer:
                 of the numpy world array
             border_thickness (float): A value in the [0, 1] range that defines
                 the fraction of a world cell's size that is replaced with border
-            border value (float): Currently used to represent border's internally.
+            border_value (float): Currently used to represent border's internally.
                 Should just be set to not conflict with other values/colors.
         """
         super(Renderer, self).__init__(*args, **kwargs)
