@@ -160,6 +160,16 @@ class Renderer:
         points_im = h_points_i[:2, :]
         return points_im, visible_indices
 
+    def point_pair_to_line(self, p1, p2):
+        ''' Formula to get the line coefficients from two (potentially sets of) points 
+            on the form (N, 2)
+        '''
+        kdiv = p1[:, [1]] - p2[:, [1]]
+        kdiv[kdiv == 0] = 1
+        k = (p1[:, [0]] - p2[:, [0]]) / kdiv
+        m = (p1[:, [1]] * p2[:, [0]] - p2[:, [1]] * p1[:, [0]]) / kdiv
+        return k, m
+
     def render(self, world_array, camera, image_size):
         """Create a image_size-sized np array that represents
             the projection of the world_array as seen from camera.
@@ -180,6 +190,7 @@ class Renderer:
         # TODO: Allow a list of objects (np arrays) to be rendered, each with world position and rotation
 
         # Adjust camera to image resolution aspect ratio
+        # TODO: This should be done cleaner. Renderer shouldnt have to remake camera's variables.
         camera._regenerate_intrinsic_matrix(aspect_ratio=image_size[0] / image_size[1])
 
         # Get world coordinate system surfaces from the render-function of the parent Renderer
@@ -269,56 +280,75 @@ class Renderer:
                 :, [2, 3, 1, 0], :
             ]
 
-        def point_pair_to_line(p1, p2):
-            # Formula to get the line coefficients from two (potentially sets of) points
-            kdiv = p1[:, [1]] - p2[:, [1]]
-            kdiv[kdiv == 0] = 1
-            k = (p1[:, [0]] - p2[:, [0]]) / kdiv
-            m = (p1[:, [1]] * p2[:, [0]] - p2[:, [1]] * p1[:, [0]]) / kdiv
-            return k, m
-
+        # Create some background to paint on
         frame = np.zeros(image_size)
+
+        # Find the mins and maxes of each surface in order to find the
+        # "rectangle of interest" that we will work on
+        min_y_per_surface = np.clip(
+            np.floor(np.min(image_points[:, :, 0], axis=1)), 0, image_size[0] - 2
+        ).astype(int)
+        max_y_per_surface = np.clip(
+            np.ceil(np.max(image_points[:, :, 0], axis=1)),
+            0,
+            image_size[0] - 1,
+        ).astype(int)
+        min_x_per_surface = np.clip(
+            np.floor(np.min(image_points[:, :, 1], axis=1)),
+            0,
+            image_size[1] - 2,
+        ).astype(int)
+        max_x_per_surface = np.clip(
+            np.ceil(np.max(image_points[:, :, 1], axis=1)),
+            0,
+            image_size[1] - 1,
+        ).astype(int)
+
+        # Give the vertices of the quad variable names
+        # to make visualizing the edges a little clearer
+        a_per_surface = image_points[:, 0]
+        b_per_surface = image_points[:, 1]
+        c_per_surface = image_points[:, 2]
+        d_per_surface = image_points[:, 3]
+
+        # Readjust the coordinate system to fit inside our smaller rectangle of interest
+        a_per_surface[:, 0] -= min_y_per_surface
+        b_per_surface[:, 0] -= min_y_per_surface
+        c_per_surface[:, 0] -= min_y_per_surface
+        d_per_surface[:, 0] -= min_y_per_surface
+        a_per_surface[:, 1] -= min_x_per_surface
+        b_per_surface[:, 1] -= min_x_per_surface
+        c_per_surface[:, 1] -= min_x_per_surface
+        d_per_surface[:, 1] -= min_x_per_surface
+
+        # Calculate coefficients of each quad's edge lines
+        ba_k_per_surface, ba_m_per_surface = self.point_pair_to_line(
+            a_per_surface, b_per_surface
+        )
+        cb_k_per_surface, cb_m_per_surface = self.point_pair_to_line(
+            b_per_surface, c_per_surface
+        )
+        dc_k_per_surface, dc_m_per_surface = self.point_pair_to_line(
+            c_per_surface, d_per_surface
+        )
+        ad_k_per_surface, ad_m_per_surface = self.point_pair_to_line(
+            d_per_surface, a_per_surface
+        )
+
+        frame_coord_grid = np.mgrid[0: image_size[0], 0: image_size[1]]
         for surface_idx in range(len(image_points)):
-            # Give the vertices of the quad variable names
-            # to make visualizing the edges a little clearer
-            a = image_points[[surface_idx], 0]
-            b = image_points[[surface_idx], 1]
-            c = image_points[[surface_idx], 2]
-            d = image_points[[surface_idx], 3]
+            a = a_per_surface[[surface_idx]]
+            b = b_per_surface[[surface_idx]]
+            c = c_per_surface[[surface_idx]]
+            d = d_per_surface[[surface_idx]]
 
-            min_y = np.clip(
-                math.floor(np.min(image_points[[surface_idx], :, 0])),
-                0,
-                image_size[0] - 2,
-            )
-            max_y = np.clip(
-                math.ceil(np.max(image_points[[surface_idx], :, 0])),
-                0,
-                image_size[0] - 1,
-            )
-            min_x = np.clip(
-                math.floor(np.min(image_points[[surface_idx], :, 1])),
-                0,
-                image_size[1] - 2,
-            )
-            max_x = np.clip(
-                math.ceil(np.max(image_points[[surface_idx], :, 1])),
-                0,
-                image_size[1] - 1,
-            )
+            min_y = min_y_per_surface[surface_idx]
+            max_y = max_y_per_surface[surface_idx]
+            min_x = min_x_per_surface[surface_idx]
+            max_x = max_x_per_surface[surface_idx]
 
-            # Readjust the coordinate system to fit inside our smaller rectangle of interest
-            a[:, 0] -= min_y
-            b[:, 0] -= min_y
-            c[:, 0] -= min_y
-            d[:, 0] -= min_y
-            a[:, 1] -= min_x
-            b[:, 1] -= min_x
-            c[:, 1] -= min_x
-            d[:, 1] -= min_x
-
-            # Create an y,x index grid to plug into our "quad fill" formula
-            coords = np.mgrid[: max_y - min_y, 0 : max_x - min_x]
+            # Create a view of an y, x index grid to plug into our "quad fill" formula
+            coords = frame_coord_grid[:, 0: max_y - min_y, 0: max_x - min_x]
 
             # Paint the quad's inside
             within_line_1 = (
@@ -337,23 +367,30 @@ class Renderer:
                 (coords[1] - d[:, 1]) * (a[:, 0] - d[:, 0])
                 - (coords[0] - d[:, 0]) * (a[:, 1] - d[:, 1])
             ) >= 0
+
             frame[min_y:max_y, min_x:max_x][
                 within_line_1 & within_line_2 & within_line_3 & within_line_4
             ] = values[surface_idx]
 
-            # Paint border
-            # Get coefficients of each quad's edge lines
-            ba_k, ba_m = point_pair_to_line(a, b)
-            cb_k, cb_m = point_pair_to_line(b, c)
-            dc_k, dc_m = point_pair_to_line(c, d)
-            ad_k, ad_m = point_pair_to_line(d, a)
+            if not self.show_border:
+                continue
+
+            # Get the y=k*x+m line coefficients for each edge
+            ba_k = ba_k_per_surface[surface_idx]
+            ba_m = ba_m_per_surface[surface_idx]
+            cb_k = cb_k_per_surface[surface_idx]
+            cb_m = cb_m_per_surface[surface_idx]
+            dc_k = dc_k_per_surface[surface_idx]
+            dc_m = dc_m_per_surface[surface_idx]
+            ad_k = ad_k_per_surface[surface_idx]
+            ad_m = ad_m_per_surface[surface_idx]
 
             # Some heuristic on how wide the line should be related to the area of the cell
             area = (max_y - min_y) * (max_x - min_x)
             lw = self.border_thickness * math.sqrt(area)
 
             # Paint all points that are within the quad and within lw of an edge
-            frame[min_y:max_y, min_x:max_x][
+            frame[min_y: max_y, min_x: max_x][
                 within_line_1
                 & within_line_2
                 & within_line_3

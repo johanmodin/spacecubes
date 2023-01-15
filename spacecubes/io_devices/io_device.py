@@ -30,12 +30,12 @@ class IODevice(ABC):
     @abstractmethod
     def _output_frame_data(frame_data, camera):
         """Outputs frame data as defined by the specific IODevice and/or returns
-           data related to the frame.
-        
+        data related to the frame.
+
         """
         pass
 
-    def get_input(self):
+    def get_input(self, timeout=0):
         """Returns input received by the device, e.g., key strokes"""
         raise NotImplementedError(
             f"This function does not yet have an implementation in {self.__class__.__name__}"

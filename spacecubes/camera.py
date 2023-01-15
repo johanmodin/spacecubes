@@ -27,7 +27,6 @@ class Camera:
         self.z = z
 
         # Create a quaternion from the initial roll, pitch and yaw
-        # self.Q = self.quat_from_ypr(yaw=yaw, pitch=pitch, roll=roll)
         self.Q = Quaternion(1, 0, 0, 0)
 
         # Generate the camera matrices
@@ -48,7 +47,7 @@ class Camera:
         qw = np.cos(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) + np.sin(
             roll / 2
         ) * np.sin(pitch / 2) * np.sin(yaw / 2)
-        return Quaternion(w=qw, x=qx, y=qy, z=qz)
+        return Quaternion(w=qw, x=-qy, y=qz, z=-qx)
 
     def _regenerate_extrinsic_matrix(self):
         """Recalculates and sets the camera's extrinsic matrix"""
@@ -116,22 +115,20 @@ class Camera:
         return self.Q
 
     def look_at(self, x, y, z):
-        """Rotates the camera to look at a world position specified as (x, y, z)
-
-        Find a quaternion that has the axis specified by the target and camera position
-        """
+        """Find a quaternion that has its axis pointed at the target position"""
         src = np.array([self.x, self.y, self.z], dtype=np.float64)
         dst = np.array([x, y, z], dtype=np.float64)
 
-        fwd_v = (dst - src) / math.sqrt(np.sum((dst - src) ** 2))
-        fwd = np.array([0, 0, 1])
-        d = np.dot(fwd, fwd_v)
+        camera_new_fwd = dst - src
+        camera_new_fwd = camera_new_fwd / math.sqrt(np.sum(camera_new_fwd**2))
+        world_fwd = np.array([0, 0, 1])
+        d = np.dot(world_fwd, camera_new_fwd)
         if abs(d) > 1:
             # Maybe warn
             rot = 0
         else:
             rot = math.acos(d)
-        rot_axis = np.cross(fwd, fwd_v)
+        rot_axis = np.cross(world_fwd, camera_new_fwd)
         rot_axis = rot_axis / math.sqrt(np.sum(rot_axis**2))
         s = math.sin(rot * 0.5)
         self.Q = Quaternion(
@@ -149,6 +146,13 @@ class Camera:
         self.z += z
         self._regenerate_extrinsic_matrix()
 
+    def move_to_xyz(self, x=0, y=0, z=0):
+        """Set the camera to a position given in world coordinates"""
+        self.x = x
+        self.y = y
+        self.z = z
+        self._regenerate_extrinsic_matrix()
+
     def move(self, forward=0, right=0, up=0):
         """Translates the camera in camera coordinates"""
         # Calculate the i-component in the world frame
@@ -158,9 +162,9 @@ class Camera:
         ).axis * forward
 
         # Calculate the j-component in the world frame
-        world_side = [0, 1, 0]
-        dxs, dys, dzs = (
-            self.Q.unit * np.array([0, *world_side]) * self.Q.unit.conjugate.unit
+        world_right = [0, 1, 0]
+        dxr, dyr, dzr = (
+            self.Q.unit * np.array([0, *world_right]) * self.Q.unit.conjugate.unit
         ).axis * right
 
         # Calculate the k-component in the world frame
@@ -169,16 +173,18 @@ class Camera:
             self.Q.unit * np.array([0, *world_up]) * self.Q.unit.conjugate.unit
         ).axis * up
 
-        dx = dxf + dxs + dxu
-        dy = dyf + dys + dyu
-        dz = dzf + dzs + dzu
+        # Add all of the components together to get the final coordinate change
+        # in each world axis
+        dx = dxf + dxr + dxu
+        dy = dyf + dyr + dyu
+        dz = dzf + dzr + dzu
 
         self.x += dx
         self.y += dy
         self.z += dz
         self._regenerate_extrinsic_matrix()
 
-    def rotate(self, roll=0, pitch=0, yaw=0):
+    def rotate(self, yaw=0, pitch=0, roll=0):
         """Rotates the camera the given amount of roll, pitch and yaw"""
-        self.Q *= self._quaternion_from_yaw_pitch_roll(roll=roll, pitch=pitch, yaw=yaw)
+        self.Q *= self._quaternion_from_yaw_pitch_roll(yaw=yaw, pitch=pitch, roll=roll)
         self._regenerate_extrinsic_matrix()

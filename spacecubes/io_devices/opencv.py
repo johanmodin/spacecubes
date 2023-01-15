@@ -28,6 +28,9 @@ class OpenCV(IODevice):
     def get_resolution(self):
         return self.resolution
 
+    def get_input(self, timeout=0):
+        return cv2.waitKey(timeout)
+
     def close(self):
         cv2.destroyAllWindows()
 
