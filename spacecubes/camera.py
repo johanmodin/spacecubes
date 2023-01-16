@@ -33,21 +33,25 @@ class Camera:
         self._regenerate_extrinsic_matrix()
         self._regenerate_intrinsic_matrix()
 
+
     def _quaternion_from_yaw_pitch_roll(self, yaw=0, pitch=0, roll=0):
-        """Create a quaternion from yaw, pitch and roll given in radians"""
-        qx = np.sin(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) - np.cos(
-            roll / 2
-        ) * np.sin(pitch / 2) * np.sin(yaw / 2)
-        qy = np.cos(roll / 2) * np.sin(pitch / 2) * np.cos(yaw / 2) + np.sin(
-            roll / 2
-        ) * np.cos(pitch / 2) * np.sin(yaw / 2)
-        qz = np.cos(roll / 2) * np.cos(pitch / 2) * np.sin(yaw / 2) - np.sin(
-            roll / 2
-        ) * np.sin(pitch / 2) * np.cos(yaw / 2)
-        qw = np.cos(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) + np.sin(
-            roll / 2
-        ) * np.sin(pitch / 2) * np.sin(yaw / 2)
-        return Quaternion(w=qw, x=-qy, y=qz, z=-qx)
+        """Create a quaternion from yaw, pitch and roll given in radians
+        
+           Adapted from https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+        """
+        cr = math.cos(roll * 0.5)
+        sr = math.sin(roll * 0.5)
+        cp = math.cos(pitch * 0.5)
+        sp = math.sin(pitch * 0.5)
+        cy = math.cos(yaw * 0.5)
+        sy = math.sin(yaw * 0.5)
+
+        w = cr * cp * cy + sr * sp * sy
+        x = sr * cp * cy - cr * sp * sy
+        y = cr * sp * cy + sr * cp * sy
+        z = cr * cp * sy - sr * sp * cy
+
+        return Quaternion(w=w, x=-y, y=z, z=-x)
 
     def _regenerate_extrinsic_matrix(self):
         """Recalculates and sets the camera's extrinsic matrix"""
@@ -154,7 +158,12 @@ class Camera:
         self._regenerate_extrinsic_matrix()
 
     def move(self, forward=0, right=0, up=0):
-        """Translates the camera in camera coordinates"""
+        """Translates the camera in camera coordinates
+
+           Uses p' = QpQ^* to find the world position move corresponding
+           to a move in the camera's frame
+           
+        """
         # Calculate the i-component in the world frame
         world_forward = [0, 0, 1]
         dxf, dyf, dzf = (
