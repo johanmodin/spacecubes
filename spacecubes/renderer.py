@@ -196,6 +196,14 @@ class Renderer:
         # Get world coordinate system surfaces from the render-function of the parent Renderer
         surfaces = self.points_to_surfaces(world_array)
 
+        # Ignore surfaces that are pointing away from us
+        for surface_dir in surfaces:
+            cam_to_surface_dir = np.mean(surfaces[surface_dir]['world_coordinates'], axis=1) - camera.position
+            angles_to_surfaces = np.arccos(np.dot(cam_to_surface_dir, surface_dir) / (np.linalg.norm(cam_to_surface_dir, axis=1)))
+            visible_surfaces = angles_to_surfaces > np.pi / 2
+            surfaces[surface_dir]['world_coordinates'] = surfaces[surface_dir]['world_coordinates'][visible_surfaces]
+            surfaces[surface_dir]['values'] = surfaces[surface_dir]['values'][visible_surfaces]
+
         # Project the world points onto the image
         for surface_direction in surfaces:
             (
