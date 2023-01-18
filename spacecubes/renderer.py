@@ -170,6 +170,18 @@ class Renderer:
         m = (p1[:, [1]] * p2[:, [0]] - p2[:, [1]] * p1[:, [0]]) / kdiv
         return k, m
 
+    def _filter_nonvisible_surfaces(self, surfaces, camera):
+        ''' Remove surfaces that have normals that are pointing away from us as these will be 
+            covered by other surfaces
+        '''
+        for surface_dir in surfaces:
+            cam_to_surface_dir = np.mean(surfaces[surface_dir]['world_coordinates'], axis=1) - camera.position
+            angles_to_surfaces = np.arccos(np.dot(cam_to_surface_dir, surface_dir) / (np.linalg.norm(cam_to_surface_dir, axis=1)))
+            visible_surfaces = angles_to_surfaces > np.pi / 2
+            surfaces[surface_dir]['world_coordinates'] = surfaces[surface_dir]['world_coordinates'][visible_surfaces]
+            surfaces[surface_dir]['values'] = surfaces[surface_dir]['values'][visible_surfaces]
+        return surfaces
+
     def render(self, world_array, camera, image_size):
         """Create a image_size-sized np array that represents
             the projection of the world_array as seen from camera.
@@ -188,21 +200,18 @@ class Renderer:
             as seen by the camera.
         """
         # TODO: Allow a list of objects (np arrays) to be rendered, each with world position and rotation
-
+        # TODO: Break this function up into more aptly sized functions
         # Adjust camera to image resolution aspect ratio
         # TODO: This should be done cleaner. Renderer shouldnt have to remake camera's variables.
+        # TODO: surfaces should be split up into a few different variables instead of a list of dict
         camera._regenerate_intrinsic_matrix(aspect_ratio=image_size[0] / image_size[1])
 
         # Get world coordinate system surfaces from the render-function of the parent Renderer
         surfaces = self.points_to_surfaces(world_array)
 
         # Ignore surfaces that are pointing away from us
-        for surface_dir in surfaces:
-            cam_to_surface_dir = np.mean(surfaces[surface_dir]['world_coordinates'], axis=1) - camera.position
-            angles_to_surfaces = np.arccos(np.dot(cam_to_surface_dir, surface_dir) / (np.linalg.norm(cam_to_surface_dir, axis=1)))
-            visible_surfaces = angles_to_surfaces > np.pi / 2
-            surfaces[surface_dir]['world_coordinates'] = surfaces[surface_dir]['world_coordinates'][visible_surfaces]
-            surfaces[surface_dir]['values'] = surfaces[surface_dir]['values'][visible_surfaces]
+        surfaces = self._filter_nonvisible_surfaces(surfaces, camera)
+
 
         # Project the world points onto the image
         for surface_direction in surfaces:
@@ -312,22 +321,16 @@ class Renderer:
             image_size[1] - 1,
         ).astype(int)
 
+        # Readjust the coordinate system to fit inside our smaller rectangle of interest
+        image_points[:, :, 0] -= min_y_per_surface[:, np.newaxis]
+        image_points[:, :, 1] -= min_x_per_surface[:, np.newaxis]
+
         # Give the vertices of the quad variable names
         # to make visualizing the edges a little clearer
         a_per_surface = image_points[:, 0]
         b_per_surface = image_points[:, 1]
         c_per_surface = image_points[:, 2]
         d_per_surface = image_points[:, 3]
-
-        # Readjust the coordinate system to fit inside our smaller rectangle of interest
-        a_per_surface[:, 0] -= min_y_per_surface
-        b_per_surface[:, 0] -= min_y_per_surface
-        c_per_surface[:, 0] -= min_y_per_surface
-        d_per_surface[:, 0] -= min_y_per_surface
-        a_per_surface[:, 1] -= min_x_per_surface
-        b_per_surface[:, 1] -= min_x_per_surface
-        c_per_surface[:, 1] -= min_x_per_surface
-        d_per_surface[:, 1] -= min_x_per_surface
 
         # Calculate coefficients of each quad's edge lines
         ba_k_per_surface, ba_m_per_surface = self.point_pair_to_line(
@@ -376,6 +379,8 @@ class Renderer:
                 - (coords[0] - d[:, 0]) * (a[:, 1] - d[:, 1])
             ) >= 0
 
+            # Put the value of the surface within the surface's edges
+            # on the image plane
             frame[min_y:max_y, min_x:max_x][
                 within_line_1 & within_line_2 & within_line_3 & within_line_4
             ] = values[surface_idx]
