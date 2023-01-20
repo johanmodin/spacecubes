@@ -133,7 +133,25 @@ class Renderer:
             (0, 0, 1): {"world_coordinates": z_surfaces_pos_w, "values": z_pos_values},
             (0, 0, -1): {"world_coordinates": z_surfaces_neg_w, "values": z_neg_values},
         }
-        return surface_data
+
+        world_points = {
+            (1, 0, 0): x_surfaces_pos_w,
+            (-1, 0, 0): x_surfaces_neg_w,
+            (0, 1, 0): y_surfaces_pos_w,
+            (0, -1, 0): y_surfaces_neg_w,
+            (0, 0, 1): z_surfaces_pos_w,
+            (0, 0, -1): z_surfaces_neg_w,
+        }
+
+        values = {
+            (1, 0, 0): x_pos_values,
+            (-1, 0, 0): x_neg_values,
+            (0, 1, 0): y_pos_values,
+            (0, -1, 0): y_neg_values,
+            (0, 0, 1): z_pos_values,
+            (0, 0, -1): z_neg_values,
+        }
+        return world_points, values
 
     def project_points(self, points, camera, image_size):
         """Projects points from camera coordinate system (XYZ) to
@@ -161,26 +179,31 @@ class Renderer:
         return points_im, visible_indices
 
     def point_pair_to_line(self, p1, p2):
-        ''' Formula to get the line coefficients from two (potentially sets of) points 
-            on the form (N, 2)
-        '''
+        """Formula to get the line coefficients from two (potentially sets of) points
+        on the form (N, 2)
+        """
         kdiv = p1[:, [1]] - p2[:, [1]]
         kdiv[kdiv == 0] = 1
         k = (p1[:, [0]] - p2[:, [0]]) / kdiv
         m = (p1[:, [1]] * p2[:, [0]] - p2[:, [1]] * p1[:, [0]]) / kdiv
         return k, m
 
-    def _filter_nonvisible_surfaces(self, surfaces, camera):
-        ''' Remove surfaces that have normals that are pointing away from us as these will be 
-            covered by other surfaces
-        '''
-        for surface_dir in surfaces:
-            cam_to_surface_dir = np.mean(surfaces[surface_dir]['world_coordinates'], axis=1) - camera.position
-            angles_to_surfaces = np.arccos(np.dot(cam_to_surface_dir, surface_dir) / (np.linalg.norm(cam_to_surface_dir, axis=1)))
+    def _filter_nonvisible_surfaces(self, world_points, values, camera):
+        """Remove surfaces that have normals that are pointing away from us as these will be
+        covered by other surfaces
+        """
+        for surface_dir in world_points:
+            cam_to_surface_dir = (
+                np.mean(world_points[surface_dir], axis=1) - camera.position
+            )
+            angles_to_surfaces = np.arccos(
+                np.dot(cam_to_surface_dir, surface_dir)
+                / (np.linalg.norm(cam_to_surface_dir, axis=1))
+            )
             visible_surfaces = angles_to_surfaces > np.pi / 2
-            surfaces[surface_dir]['world_coordinates'] = surfaces[surface_dir]['world_coordinates'][visible_surfaces]
-            surfaces[surface_dir]['values'] = surfaces[surface_dir]['values'][visible_surfaces]
-        return surfaces
+            world_points[surface_dir] = world_points[surface_dir][visible_surfaces]
+            values[surface_dir] = values[surface_dir][visible_surfaces]
+        return world_points, values
 
     def render(self, world_array, camera, image_size):
         """Create a image_size-sized np array that represents
@@ -207,43 +230,45 @@ class Renderer:
         camera._regenerate_intrinsic_matrix(aspect_ratio=image_size[0] / image_size[1])
 
         # Get world coordinate system surfaces from the render-function of the parent Renderer
-        surfaces = self.points_to_surfaces(world_array)
+        world_points, values = self.points_to_surfaces(world_array)
 
         # Ignore surfaces that are pointing away from us
-        surfaces = self._filter_nonvisible_surfaces(surfaces, camera)
-
+        world_points, values = self._filter_nonvisible_surfaces(
+            world_points, values, camera
+        )
 
         # Project the world points onto the image
-        for surface_direction in surfaces:
+        image_points = {}
+        for surface_direction in world_points:
             (
-                surfaces[surface_direction]["image_coordinates"],
+                image_points[surface_direction],
                 visible_indices,
             ) = self.world_points_to_image_points(
-                surfaces[surface_direction]["world_coordinates"], camera, image_size
+                world_points[surface_direction], camera, image_size
             )
 
             # Only retain surfaces that have any point infront of the camera
             visible_indices_per_surface = np.reshape(
                 visible_indices,
-                (len(surfaces[surface_direction]["image_coordinates"]), 4),
+                (len(image_points[surface_direction]), 4),
             )
             retained_surface_indices = np.all(visible_indices_per_surface, axis=1)
-            surfaces[surface_direction]["image_coordinates"] = surfaces[
-                surface_direction
-            ]["image_coordinates"][retained_surface_indices]
-            surfaces[surface_direction]["world_coordinates"] = surfaces[
-                surface_direction
-            ]["world_coordinates"][retained_surface_indices]
-            surfaces[surface_direction]["values"] = surfaces[surface_direction][
-                "values"
-            ][retained_surface_indices]
+            world_points[surface_direction] = world_points[surface_direction][
+                retained_surface_indices
+            ]
+            image_points[surface_direction] = image_points[surface_direction][
+                retained_surface_indices
+            ]
+            values[surface_direction] = values[surface_direction][
+                retained_surface_indices
+            ]
 
         # Reorder y-axis elements to align them with the orders of other axes
-        surfaces[(0, 1, 0)]["image_coordinates"] = np.take(
-            surfaces[(0, 1, 0)]["image_coordinates"], np.array([3, 1, 2, 0]), axis=1
+        image_points[(0, 1, 0)] = np.take(
+            image_points[(0, 1, 0)], np.array([3, 1, 2, 0]), axis=1
         )
-        surfaces[(0, -1, 0)]["image_coordinates"] = np.take(
-            surfaces[(0, -1, 0)]["image_coordinates"], np.array([3, 1, 2, 0]), axis=1
+        image_points[(0, -1, 0)] = np.take(
+            image_points[(0, -1, 0)], np.array([3, 1, 2, 0]), axis=1
         )
 
         # Batch preprocess position differences to allow
@@ -251,9 +276,10 @@ class Renderer:
         camera_position = np.array([[camera.x, camera.y, camera.z]])
         pos_diffs = {}
         positive_pos_along_surface_axis = {}
-        for surf_dir in surfaces:
-            world_points = surfaces[surf_dir]["world_coordinates"]
-            pos_diffs[surf_dir] = np.mean(camera_position - world_points, axis=1)
+        for surf_dir in world_points:
+            pos_diffs[surf_dir] = np.mean(
+                camera_position - world_points[surf_dir], axis=1
+            )
             dimension = np.argmax(np.abs(surf_dir))
             positive_pos_along_surface_axis[surf_dir] = (
                 pos_diffs[surf_dir][:, dimension] >= 0
@@ -261,10 +287,9 @@ class Renderer:
 
         # Remove the surface direction key and concatenate everything
         # for easier handling
-        image_points = np.concatenate(
-            [surfaces[d]["image_coordinates"] for d in surfaces]
-        )
-        values = np.concatenate([surfaces[d]["values"] for d in surfaces])
+        world_points = np.concatenate([world_points[d] for d in world_points])
+        image_points = np.concatenate([image_points[d] for d in image_points])
+        values = np.concatenate([values[d] for d in values])
         image_surface_order = np.concatenate(
             [
                 positive_pos_along_surface_axis[d]
@@ -346,7 +371,7 @@ class Renderer:
             d_per_surface, a_per_surface
         )
 
-        frame_coord_grid = np.mgrid[0: image_size[0], 0: image_size[1]]
+        frame_coord_grid = np.mgrid[0 : image_size[0], 0 : image_size[1]]
         for surface_idx in range(len(image_points)):
             a = a_per_surface[[surface_idx]]
             b = b_per_surface[[surface_idx]]
@@ -359,7 +384,7 @@ class Renderer:
             max_x = max_x_per_surface[surface_idx]
 
             # Create a view of an y, x index grid to plug into our "quad fill" formula
-            coords = frame_coord_grid[:, 0: max_y - min_y, 0: max_x - min_x]
+            coords = frame_coord_grid[:, 0 : max_y - min_y, 0 : max_x - min_x]
 
             # Paint the quad's inside
             within_line_1 = (
@@ -403,7 +428,7 @@ class Renderer:
             lw = self.border_thickness * math.sqrt(area)
 
             # Paint all points that are within the quad and within lw of an edge
-            frame[min_y: max_y, min_x: max_x][
+            frame[min_y:max_y, min_x:max_x][
                 within_line_1
                 & within_line_2
                 & within_line_3

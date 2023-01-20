@@ -33,11 +33,10 @@ class Camera:
         self._regenerate_extrinsic_matrix()
         self._regenerate_intrinsic_matrix()
 
-
     def _quaternion_from_yaw_pitch_roll(self, yaw=0, pitch=0, roll=0):
         """Create a quaternion from yaw, pitch and roll given in radians
-        
-           Adapted from https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+
+        Adapted from https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
         """
         cr = math.cos(roll * 0.5)
         sr = math.sin(roll * 0.5)
@@ -160,9 +159,9 @@ class Camera:
     def move(self, forward=0, right=0, up=0):
         """Translates the camera in camera coordinates
 
-           Uses p' = QpQ^* to find the world position move corresponding
-           to a move in the camera's frame
-           
+        Uses p' = QpQ^* to find the world position move corresponding
+        to a move in the camera's frame
+
         """
         # Calculate the i-component in the world frame
         world_forward = [0, 0, 1]
