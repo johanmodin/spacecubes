@@ -205,7 +205,6 @@ class Renderer:
             values[surface_dir] = values[surface_dir][visible_surfaces]
         return world_points, values
 
-    @profile
     def render(self, world_array, camera, image_size):
         """Create a image_size-sized np array that represents
             the projection of the world_array as seen from camera.
@@ -401,23 +400,33 @@ class Renderer:
             coords = frame_coord_grid[:, 0 : max_y - min_y, 0 : max_x - min_x]
 
             # Paint the quad's inside
-            within_line_1 = (
-                (coords[1] - a[1]) * (b[0] - a[0]) - (coords[0] - a[0]) * (b[1] - a[1])
-            ) >= 0
-            within_line_2 = (
-                (coords[1] - b[1]) * (c[0] - b[0]) - (coords[0] - b[0]) * (c[1] - b[1])
-            ) >= 0
-            within_line_3 = (
-                (coords[1] - c[1]) * (d[0] - c[0]) - (coords[0] - c[0]) * (d[1] - c[1])
-            ) >= 0
-            within_line_4 = (
-                (coords[1] - d[1]) * (a[0] - d[0]) - (coords[0] - d[0]) * (a[1] - d[1])
-            ) >= 0
-            within_line = within_line_1 & within_line_2 & within_line_3 & within_line_4
+            # Find all points that are inside the quad's exterior edges
+            within_edges = (
+                (
+                    (coords[1] - a[1]) * (b[0] - a[0])
+                    - (coords[0] - a[0]) * (b[1] - a[1])
+                    >= 0
+                )
+                & (
+                    (coords[1] - b[1]) * (c[0] - b[0])
+                    - (coords[0] - b[0]) * (c[1] - b[1])
+                    >= 0
+                )
+                & (
+                    (coords[1] - c[1]) * (d[0] - c[0])
+                    - (coords[0] - c[0]) * (d[1] - c[1])
+                    >= 0
+                )
+                & (
+                    (coords[1] - d[1]) * (a[0] - d[0])
+                    - (coords[0] - d[0]) * (a[1] - d[1])
+                    >= 0
+                )
+            )
 
             # Put the value of the surface within the surface's edges
-            # on the image plane
-            frame[min_y:max_y, min_x:max_x][within_line] = values[surface_idx]
+            # on the image frame
+            frame[min_y:max_y, min_x:max_x][within_edges] = values[surface_idx]
 
             if not self.show_border:
                 continue
@@ -438,10 +447,10 @@ class Renderer:
             ad_k = ad_k_per_surface[surface_idx]
             ad_m = ad_m_per_surface[surface_idx]
 
-            # Paint the border by painting all points that are within the quad
-            # and within lw of an edge
+            # Paint the border by setting the border value on all points that
+            # are within the quad and within lw of an edge
             frame[min_y:max_y, min_x:max_x][
-                within_line
+                within_edges
                 & (
                     (np.abs(ba_k * coords[1] + ba_m - coords[0]) <= lw)
                     | (np.abs(cb_k * coords[1] + cb_m - coords[0]) <= lw)
