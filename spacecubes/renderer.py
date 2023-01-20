@@ -205,6 +205,7 @@ class Renderer:
             values[surface_dir] = values[surface_dir][visible_surfaces]
         return world_points, values
 
+    @profile
     def render(self, world_array, camera, image_size):
         """Create a image_size-sized np array that represents
             the projection of the world_array as seen from camera.
@@ -274,16 +275,21 @@ class Renderer:
         # Batch preprocess position differences to allow
         # determining surface corner order in a vectorized way
         camera_position = np.array([[camera.x, camera.y, camera.z]])
-        pos_diffs = {}
-        positive_pos_along_surface_axis = {}
-        for surf_dir in world_points:
-            pos_diffs[surf_dir] = np.mean(
-                camera_position - world_points[surf_dir], axis=1
+        surface_distance = {}
+        image_surface_order = {}
+        for surface_direction in world_points:
+            # Get the distance in each dimension from the camera to
+            # each surface
+            surface_distance[surface_direction] = np.mean(
+                camera_position - world_points[surface_direction], axis=1
             )
-            dimension = np.argmax(np.abs(surf_dir))
-            positive_pos_along_surface_axis[surf_dir] = (
-                pos_diffs[surf_dir][:, dimension] >= 0
-            )
+
+            # Get the difference in position between
+            # the camera and each surface in its normal's axis
+            # to determine the order of the edges
+            dimension = np.argmax(np.abs(surface_direction))
+            pos_dir = surface_distance[surface_direction][:, dimension] >= 0
+            image_surface_order[surface_direction] = pos_dir
 
         # Remove the surface direction key and concatenate everything
         # for easier handling
@@ -291,19 +297,17 @@ class Renderer:
         image_points = np.concatenate([image_points[d] for d in image_points])
         values = np.concatenate([values[d] for d in values])
         image_surface_order = np.concatenate(
-            [
-                positive_pos_along_surface_axis[d]
-                for d in positive_pos_along_surface_axis
-            ]
+            [image_surface_order[d] for d in image_surface_order]
         )
-        image_points_distance = np.linalg.norm(
-            np.concatenate([pos_diffs[d] for d in pos_diffs]), axis=1
+        surface_distance = np.concatenate(
+            [surface_distance[d] for d in surface_distance]
         )
+        surface_distance = np.linalg.norm(surface_distance, axis=1)
 
         # Sort the surfaces and accompanying data by the surface's
         # average distance to the camera. This seems to be a
         # good enough approximation for drawing order to avoid artifacts.
-        distance_sorting = np.argsort(-image_points_distance)
+        distance_sorting = np.argsort(-surface_distance)
         image_points = image_points[distance_sorting]
         image_surface_order = image_surface_order[distance_sorting]
         values = values[distance_sorting]
@@ -312,6 +316,8 @@ class Renderer:
         # by using the vectors (b - a), (c - b), (d - c) and (a - d)
         # Depending on the sign of the position difference calculated above, different
         # orders are used
+        # TODO: This and the calculation of image_surface_order is likely unnecessarily
+        # complicated, simplify
         if any(image_surface_order):
             image_points[image_surface_order] = image_points[image_surface_order][
                 :, [2, 0, 1, 3], :
@@ -371,73 +377,76 @@ class Renderer:
             d_per_surface, a_per_surface
         )
 
+        # Some heuristic on how wide the line should be related to the area of the cell
+        area_per_surface = (max_y_per_surface - min_y_per_surface) * (
+            max_x_per_surface - min_x_per_surface
+        )
+        lw_per_surface = self.border_thickness * np.sqrt(area_per_surface)
+
         frame_coord_grid = np.mgrid[0 : image_size[0], 0 : image_size[1]]
         for surface_idx in range(len(image_points)):
-            a = a_per_surface[[surface_idx]]
-            b = b_per_surface[[surface_idx]]
-            c = c_per_surface[[surface_idx]]
-            d = d_per_surface[[surface_idx]]
+            a = a_per_surface[surface_idx]
+            b = b_per_surface[surface_idx]
+            c = c_per_surface[surface_idx]
+            d = d_per_surface[surface_idx]
 
             min_y = min_y_per_surface[surface_idx]
             max_y = max_y_per_surface[surface_idx]
             min_x = min_x_per_surface[surface_idx]
             max_x = max_x_per_surface[surface_idx]
 
+            lw = lw_per_surface[surface_idx]
+
             # Create a view of an y, x index grid to plug into our "quad fill" formula
             coords = frame_coord_grid[:, 0 : max_y - min_y, 0 : max_x - min_x]
 
             # Paint the quad's inside
             within_line_1 = (
-                (coords[1] - a[:, 1]) * (b[:, 0] - a[:, 0])
-                - (coords[0] - a[:, 0]) * (b[:, 1] - a[:, 1])
+                (coords[1] - a[1]) * (b[0] - a[0]) - (coords[0] - a[0]) * (b[1] - a[1])
             ) >= 0
             within_line_2 = (
-                (coords[1] - b[:, 1]) * (c[:, 0] - b[:, 0])
-                - (coords[0] - b[:, 0]) * (c[:, 1] - b[:, 1])
+                (coords[1] - b[1]) * (c[0] - b[0]) - (coords[0] - b[0]) * (c[1] - b[1])
             ) >= 0
             within_line_3 = (
-                (coords[1] - c[:, 1]) * (d[:, 0] - c[:, 0])
-                - (coords[0] - c[:, 0]) * (d[:, 1] - c[:, 1])
+                (coords[1] - c[1]) * (d[0] - c[0]) - (coords[0] - c[0]) * (d[1] - c[1])
             ) >= 0
             within_line_4 = (
-                (coords[1] - d[:, 1]) * (a[:, 0] - d[:, 0])
-                - (coords[0] - d[:, 0]) * (a[:, 1] - d[:, 1])
+                (coords[1] - d[1]) * (a[0] - d[0]) - (coords[0] - d[0]) * (a[1] - d[1])
             ) >= 0
+            within_line = within_line_1 & within_line_2 & within_line_3 & within_line_4
 
             # Put the value of the surface within the surface's edges
             # on the image plane
-            frame[min_y:max_y, min_x:max_x][
-                within_line_1 & within_line_2 & within_line_3 & within_line_4
-            ] = values[surface_idx]
+            frame[min_y:max_y, min_x:max_x][within_line] = values[surface_idx]
 
             if not self.show_border:
                 continue
 
-            # Get the y=k*x+m line coefficients for each edge
+            # Paint the edges
+
+            # Get the y=k*x+m line coefficients for each
+            # edge: b->a, c->b, d->c, a->d
             ba_k = ba_k_per_surface[surface_idx]
             ba_m = ba_m_per_surface[surface_idx]
+
             cb_k = cb_k_per_surface[surface_idx]
             cb_m = cb_m_per_surface[surface_idx]
+
             dc_k = dc_k_per_surface[surface_idx]
             dc_m = dc_m_per_surface[surface_idx]
+
             ad_k = ad_k_per_surface[surface_idx]
             ad_m = ad_m_per_surface[surface_idx]
 
-            # Some heuristic on how wide the line should be related to the area of the cell
-            area = (max_y - min_y) * (max_x - min_x)
-            lw = self.border_thickness * math.sqrt(area)
-
-            # Paint all points that are within the quad and within lw of an edge
+            # Paint the border by painting all points that are within the quad
+            # and within lw of an edge
             frame[min_y:max_y, min_x:max_x][
-                within_line_1
-                & within_line_2
-                & within_line_3
-                & within_line_4
+                within_line
                 & (
-                    (np.abs(ba_k * coords[1] + ba_m - coords[0]) < lw)
-                    | (np.abs(cb_k * coords[1] + cb_m - coords[0]) < lw)
-                    | (np.abs(dc_k * coords[1] + dc_m - coords[0]) < lw)
-                    | (np.abs(ad_k * coords[1] + ad_m - coords[0]) < lw)
+                    (np.abs(ba_k * coords[1] + ba_m - coords[0]) <= lw)
+                    | (np.abs(cb_k * coords[1] + cb_m - coords[0]) <= lw)
+                    | (np.abs(dc_k * coords[1] + dc_m - coords[0]) <= lw)
+                    | (np.abs(ad_k * coords[1] + ad_m - coords[0]) <= lw)
                 )
             ] = self.border_value
 
