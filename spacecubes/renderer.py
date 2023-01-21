@@ -224,9 +224,9 @@ class Renderer:
         """
         # TODO: Allow a list of objects (np arrays) to be rendered, each with world position and rotation
         # TODO: Break this function up into more aptly sized functions
+        
         # Adjust camera to image resolution aspect ratio
         # TODO: This should be done cleaner. Renderer shouldnt have to remake camera's variables.
-        # TODO: surfaces should be split up into a few different variables instead of a list of dict
         camera._regenerate_intrinsic_matrix(aspect_ratio=image_size[0] / image_size[1])
 
         # Get world coordinate system surfaces from the render-function of the parent Renderer
