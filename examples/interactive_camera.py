@@ -40,6 +40,9 @@ device = OpenCV(colors=colors, resolution=(512, 512))
 # Define how much the user input should rotate or move the camera
 rotation_amount = 0.1
 move_size = 0.1
+
+# Map the OpenCV key press values to a dict that can be
+# fed to the camera functions move and rotate's keyword arguments
 rotations = {
     3: {"pitch": rotation_amount},
     2: {"pitch": -rotation_amount},
