@@ -1,6 +1,5 @@
 from collections import UserDict
 import curses
-import curses.panel
 
 import numpy as np
 import os
