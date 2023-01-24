@@ -1,12 +1,10 @@
 from collections import UserDict
 import curses
-import curses.panel
 
 import numpy as np
 import os
 
 from .io_device import IODevice
-from ..renderers.vector_renderer import VectorRenderer
 
 
 class Terminal(IODevice):
@@ -15,7 +13,6 @@ class Terminal(IODevice):
     """
 
     def __init__(self, colors={}, *args, **kwargs):
-        self.suggested_renderer = VectorRenderer
         super(Terminal, self).__init__(*args, **kwargs)
 
         # Curses setup
@@ -64,7 +61,7 @@ class Terminal(IODevice):
         w, h = os.get_terminal_size()
         return (h - 1, w)
 
-    def _output_frame_data(self, frame_data, camera):
+    def _output_frame_data(self, frame_data):
         # Paint points in terminal
         self.paint_points(frame_data)
 

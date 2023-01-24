@@ -1,7 +1,7 @@
-import os
-import sys
 import time
 from abc import ABC, abstractmethod
+
+from ..renderer import Renderer
 
 
 class IODevice(ABC):
@@ -16,7 +16,7 @@ class IODevice(ABC):
         """
         super(IODevice, self).__init__(*args, **kwargs)
         if renderer is None:
-            self.renderer = self.suggested_renderer()
+            self.renderer = Renderer()
         else:
             self.renderer = renderer
         self.fps = fps
@@ -29,20 +29,25 @@ class IODevice(ABC):
 
     @abstractmethod
     def _output_frame_data(frame_data, camera):
-        """Outputs frame data as defined by the specific IODevice"""
+        """Outputs frame data as defined by the specific IODevice and/or returns
+        data related to the frame.
+
+        """
         pass
 
-    def get_input(self):
-        """ Returns input received by the device, e.g., key strokes"""
+    def get_input(self, timeout=0):
+        """Returns input received by the device, e.g., key strokes"""
         raise NotImplementedError(
-            f'This function does not yet have an implementation in {self.__class__.__name__}')
+            f"This function does not yet have an implementation in {self.__class__.__name__}"
+        )
 
     def close(self):
-        """ Performs a graceful shutdown of the IODevice """
+        """Performs a graceful shutdown of the IODevice"""
         raise NotImplementedError(
-            f'This function does not yet have an implementation in {self.__class__.__name__}')
+            f"This function does not yet have an implementation in {self.__class__.__name__}"
+        )
 
-    def show(self, world_array, camera):
+    def render(self, world_array, camera):
         """Displays the world_array from the perspective of camera.
 
         Args:
@@ -50,9 +55,11 @@ class IODevice(ABC):
                 with non-zero elements that define the world to display
             camera (Camera): A Camera object which defines the perspective
                 to use when displaying the world
+
+        Optionally returns an output from the _output_frame_data function.
         """
         frame_data = self.renderer.render(world_array, camera, self.get_resolution())
-        self._output_frame_data(frame_data, camera)
+        return self._output_frame_data(frame_data)
 
     def limit_fps(self):
         """Sleep as needed to not exceed the frame rate of self.fps"""
