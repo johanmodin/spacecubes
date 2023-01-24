@@ -35,7 +35,7 @@ camera = Camera(x=-1, y=-1, z=-1)
 # In this case, OpenCV is used. The colors are mapped
 # from numpy array value -> BGR (in the case of OpenCV)
 colors = {1: (255, 0, 0), 2: (0, 255, 0), 3: (0, 0, 255)}
-device = OpenCV(colors=colors, resolution=(512, 512))
+device = OpenCV(colors, resolution=(512, 512))
 
 # Define how much the user input should rotate or move the camera
 rotation_amount = 0.1
