@@ -1,5 +1,5 @@
-''' An example showing how a camera can be moved 
-    interactively using OpenCV.
+''' An example showing how a camera can be moved and display
+    voxels from a NumPy array interactively using OpenCV.
 
     The controls are set to:
     W: Forward
