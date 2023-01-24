@@ -224,7 +224,7 @@ class Renderer:
         """
         # TODO: Allow a list of objects (np arrays) to be rendered, each with world position and rotation
         # TODO: Break this function up into more aptly sized functions
-        
+
         # Adjust camera to image resolution aspect ratio
         # TODO: This should be done cleaner. Renderer shouldnt have to remake camera's variables.
         camera._regenerate_intrinsic_matrix(aspect_ratio=image_size[0] / image_size[1])
@@ -306,7 +306,7 @@ class Renderer:
         # Sort the surfaces and accompanying data by the surface's
         # average distance to the camera. This seems to be a
         # good enough approximation for drawing order to avoid artifacts.
-        distance_sorting = np.argsort(-surface_distance)
+        distance_sorting = np.argsort(surface_distance)
         image_points = image_points[distance_sorting]
         image_surface_order = image_surface_order[distance_sorting]
         values = values[distance_sorting]
@@ -326,9 +326,6 @@ class Renderer:
             image_points[~image_surface_order] = image_points[~image_surface_order][
                 :, [2, 3, 1, 0], :
             ]
-
-        # Create some background to paint on
-        frame = np.zeros(image_size)
 
         # Find the mins and maxes of each surface in order to find the
         # "rectangle of interest" that we will work on
@@ -382,19 +379,36 @@ class Renderer:
         )
         lw_per_surface = self.border_thickness * np.sqrt(area_per_surface)
 
-        frame_coord_grid = np.mgrid[0 : image_size[0], 0 : image_size[1]]
-        for surface_idx in range(len(image_points)):
-            a = a_per_surface[surface_idx]
-            b = b_per_surface[surface_idx]
-            c = c_per_surface[surface_idx]
-            d = d_per_surface[surface_idx]
+        # Create some background to paint on
+        frame = np.zeros(image_size)
+        
+        # Boolean "depth buffer" for if pixel is free (drawable) or not
+        # This is possible as the drawing is done front to back
+        depth_buffer = np.ones(image_size, dtype='bool')
 
+        frame_coord_grid = np.mgrid[0 : image_size[0], 0 : image_size[1]]
+        # The main draw loop
+        for surface_idx in range(len(image_points)):
             min_y = min_y_per_surface[surface_idx]
             max_y = max_y_per_surface[surface_idx]
             min_x = min_x_per_surface[surface_idx]
             max_x = max_x_per_surface[surface_idx]
 
+            # If there are no free pixels
+            # in the RoI, skip further calculations as they could
+            # not result in any pixels drawn
+            # This can increase performance manifold when
+            # there is a lot of occlusion
+            depth_buffer_roi = depth_buffer[min_y: max_y, min_x: max_x]
+            if not np.any(depth_buffer_roi):
+                continue
+
             lw = lw_per_surface[surface_idx]
+
+            a = a_per_surface[surface_idx]
+            b = b_per_surface[surface_idx]
+            c = c_per_surface[surface_idx]
+            d = d_per_surface[surface_idx]
 
             # Create a view of an y, x index grid to plug into our "quad fill" formula
             coords = frame_coord_grid[:, 0 : max_y - min_y, 0 : max_x - min_x]
@@ -402,6 +416,7 @@ class Renderer:
             # Paint the quad's inside
             # Find all points that are inside the quad's exterior edges
             within_edges = (
+                depth_buffer_roi &
                 (
                     (coords[1] - a[1]) * (b[0] - a[0])
                     - (coords[0] - a[0]) * (b[1] - a[1])
@@ -427,6 +442,7 @@ class Renderer:
             # Put the value of the surface within the surface's edges
             # on the image frame
             frame[min_y:max_y, min_x:max_x][within_edges] = values[surface_idx]
+            depth_buffer[min_y:max_y, min_x:max_x][within_edges] = False
 
             if not self.show_border:
                 continue
@@ -434,7 +450,7 @@ class Renderer:
             # Paint the edges
 
             # Get the y=k*x+m line coefficients for each
-            # edge: b->a, c->b, d->c, a->d
+            # clockwise edge: b->a, c->b, d->c, a->d
             ba_k = ba_k_per_surface[surface_idx]
             ba_m = ba_m_per_surface[surface_idx]
 
