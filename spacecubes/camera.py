@@ -36,6 +36,11 @@ class Camera:
     def _quaternion_from_yaw_pitch_roll(self, yaw=0, pitch=0, roll=0):
         """Create a quaternion from yaw, pitch and roll given in radians
 
+        Args: 
+            yaw (float): Yaw in radians
+            pitch (float): Pitch in radians
+            roll (float): Roll in radians
+
         Adapted from https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
         """
         cr = math.cos(roll * 0.5)
@@ -98,7 +103,7 @@ class Camera:
         system to camera coordinate system.
 
             Args:
-                world_array (np.array): A numpy array of shape (3, N)
+                world_points (np.array): A numpy array of shape (3, N)
                     holding the points in the world coordinate system
                     that are to be converted to the camera coordinate system.
         """
@@ -118,7 +123,14 @@ class Camera:
         return self.Q
 
     def look_at(self, x, y, z):
-        """Find a quaternion that has its axis pointed at the target position"""
+        """ Sets the camera to look at a world position given as x, y, z.
+
+            Args:
+                x (float): The x-coordinate of the world position to look at
+                y (float): The y-coordinate of the world position to look at
+                z (float): The z-coordinate of the world position to look at
+        """
+        # Finds a quaternion that has its axis pointed at the target position
         src = np.array([self.x, self.y, self.z], dtype=np.float64)
         dst = np.array([x, y, z], dtype=np.float64)
 
@@ -143,24 +155,42 @@ class Camera:
         self._regenerate_extrinsic_matrix()
 
     def move_xyz(self, x=0, y=0, z=0):
-        """Translates the camera in world coordinates"""
+        """Translates the camera in world coordinates
+
+            Args:
+                x (float): The movement along the world x axis
+                y (float): The movement along the world y axis
+                z (float): The movement along the world z axis
+        """
         self.x += x
         self.y += y
         self.z += z
         self._regenerate_extrinsic_matrix()
 
-    def move_to_xyz(self, x=0, y=0, z=0):
-        """Set the camera to a position given in world coordinates"""
+    def move_to_xyz(self, x, y, z):
+        """Set the camera to a position given in world coordinates
+        
+            Args:
+                x (float): The x-coordinate of the new position
+                y (float): The y-coordinate of the new position
+                z (float): The z-coordinate of the new position
+        """
         self.x = x
         self.y = y
         self.z = z
         self._regenerate_extrinsic_matrix()
 
     def move(self, forward=0, right=0, up=0):
-        """Translates the camera in camera coordinates
+        """Translates the camera in camera coordinates. Values can be
+            negative in order to allow moving back, left and down.
 
         Uses p' = QpQ^* to find the world position move corresponding
         to a move in the camera's frame
+
+        Args:
+            forward (float): The movement along the camera forward axis
+            right (float): The movement along the camera side axis
+            up (float): The movement along the camera up axis
 
         """
         # Calculate the i-component in the world frame
@@ -193,6 +223,12 @@ class Camera:
         self._regenerate_extrinsic_matrix()
 
     def rotate(self, yaw=0, pitch=0, roll=0):
-        """Rotates the camera the given amount of roll, pitch and yaw"""
+        """Rotates the camera the given amount of roll, pitch and yaw
+        
+            Args:
+                yaw (float): Angle to yaw in radians
+                pitch (float): Angle to pitch in radians
+                roll (float): Angle to roll in radians
+        """
         self.Q *= self._quaternion_from_yaw_pitch_roll(yaw=yaw, pitch=pitch, roll=roll)
         self._regenerate_extrinsic_matrix()
