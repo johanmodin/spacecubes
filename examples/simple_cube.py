@@ -25,7 +25,7 @@ colors = {1: (135, 204, 255), 'border': (234, 135, 0)}
 device = OpenCV(colors, resolution=(512, 512))
 
 # Calculate where the non-empty voxel is in order to know where
-# to point the camera (it's at (1, 1, 1))
+# to point the camera (it's at (0, 0, 0))
 object_center = np.average(np.argwhere(world > 0), axis=0)
 
 # The render loop
