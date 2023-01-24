@@ -10,6 +10,12 @@ from .io_device import IODevice
 class Terminal(IODevice):
     """An I/O device that outputs frame data by writing characters
     to the terminal using the ncurses module
+
+    Args:
+        colors (dict): A color mapping from numpy array values to
+            ncurses color values (0: black, 1: red, 2: green, 3: yellow,
+            4: blue, 5: magenta, 6: cyan, and 7: white). Nonspecified
+            colors will get a random color
     """
 
     def __init__(self, colors={}, *args, **kwargs):

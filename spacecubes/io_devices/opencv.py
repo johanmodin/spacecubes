@@ -7,9 +7,17 @@ from .io_device import IODevice
 class OpenCV(IODevice):
     """An I/O device that outputs frame data through the
     OpenCV imshow functionality
+
+        Args:
+            colors (dict): A dict mapping numpy array values to rendered
+                (B, G, R) colors, i.e., to map all voxels with value 5 to
+                green, the colors dict would be: {5: (0, 255, 0)}.
+                Additionally, the 'border' keyword can be used to set
+                a certain color to the voxel borders:
+                {'border': (50, 150, 250)}
     """
 
-    def __init__(self, resolution=(600, 800), colors={}, *args, **kwargs):
+    def __init__(self, colors, resolution=(600, 800), *args, **kwargs):
         super(OpenCV, self).__init__(*args, **kwargs)
         self.resolution = resolution
 
