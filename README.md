@@ -104,7 +104,7 @@ camera.look_at(x=3, y=5, z=2)
 # 0 and 1 that specifies where in the interpolation between the current camera
 # pose and the target camera pose that the camera should look
 for interp_amount in range(100):
-    camera.look_at(x=3, y=5, z=2, amount=interp_amount / 100)
+    camera.look_at_interpolated(x=3, y=5, z=2, amount=interp_amount / 100)
     device.render(world, camera)
 ```
 
