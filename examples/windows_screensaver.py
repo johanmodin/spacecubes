@@ -28,9 +28,8 @@ colors = {i: np.random.random(3) * 255 for i in range(1, 1000)}
 # Setup the output device
 device = OpenCV(colors, resolution=(1024, 1024))
 
-# Set some interesting direction to look at
-object_center = np.average(np.argwhere(world > 0), axis=0)
-camera.look_at(*object_center)
+# Set some interesting direction to look in
+camera.look_at(*(25, 25, 100))
 
 # Render loop
 while True:
