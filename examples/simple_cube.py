@@ -1,6 +1,6 @@
-''' An example showing the very basic usage of spacecubes
+""" An example showing the very basic usage of spacecubes
     through a simple example of rendering a single voxel (i.e., a cube)
-'''
+"""
 
 import numpy as np
 
@@ -14,11 +14,11 @@ world = np.ones((1, 1, 1))
 camera = Camera(x=-1, y=-1, z=-1)
 
 # Define what color our cube should have
-# The cube's value is 1 (as it's created with np.ones), 
+# The cube's value is 1 (as it's created with np.ones),
 # so that's the key which we set the color tuple for
 # In this case, we're going for a smooth bastard amber
 # The cube's border color can also be set using the keyword 'border'
-colors = {1: (135, 204, 255), 'border': (234, 135, 0)}
+colors = {1: (135, 204, 255), "border": (234, 135, 0)}
 
 # Initialize an output device to show the resulting frames
 # In this case, OpenCV is used.

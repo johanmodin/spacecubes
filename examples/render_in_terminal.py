@@ -1,10 +1,10 @@
-''' This example shows how the use the Terminal io_device, which
+""" This example shows how the use the Terminal io_device, which
     outputs the rendered graphics in the terminal through ncurses.
 
     The resolution of the render is the same as the resolution
     of the terminal. The resolution can often be increased/decrease with
     "CTRL -" and "CTRL +"
-'''
+"""
 
 import numpy as np
 

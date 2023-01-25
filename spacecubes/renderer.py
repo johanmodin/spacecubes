@@ -381,10 +381,10 @@ class Renderer:
 
         # Create some background to paint on
         frame = np.zeros(image_size)
-        
+
         # Boolean "depth buffer" for if pixel is free (drawable) or not
         # This is possible as the drawing is done front to back
-        depth_buffer = np.ones(image_size, dtype='bool')
+        depth_buffer = np.ones(image_size, dtype="bool")
 
         frame_coord_grid = np.mgrid[0 : image_size[0], 0 : image_size[1]]
         # The main draw loop
@@ -399,7 +399,7 @@ class Renderer:
             # not result in any pixels drawn
             # This can increase performance manifold when
             # there is a lot of occlusion
-            depth_buffer_roi = depth_buffer[min_y: max_y, min_x: max_x]
+            depth_buffer_roi = depth_buffer[min_y:max_y, min_x:max_x]
             if not np.any(depth_buffer_roi):
                 continue
 
@@ -416,8 +416,8 @@ class Renderer:
             # Paint the quad's inside
             # Find all points that are inside the quad's exterior edges
             within_edges = (
-                depth_buffer_roi &
-                (
+                depth_buffer_roi
+                & (
                     (coords[1] - a[1]) * (b[0] - a[0])
                     - (coords[0] - a[0]) * (b[1] - a[1])
                     >= 0

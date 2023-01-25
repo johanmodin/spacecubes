@@ -1,4 +1,4 @@
-''' An example showing how a camera can be moved and display
+""" An example showing how a camera can be moved and display
     voxels from a NumPy array interactively using OpenCV.
 
     The controls are set to:
@@ -15,7 +15,7 @@
     Down arrow: Look down
     ,: Twist counter-clockwise
     .: Twist clockwise
-'''
+"""
 
 import numpy as np
 

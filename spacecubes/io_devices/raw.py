@@ -16,7 +16,7 @@ class Raw(IODevice):
         {'border': (50, 150, 250)}
     """
 
-    def __init__(self,  colors=None, resolution=(600, 800), *args, **kwargs):
+    def __init__(self, colors=None, resolution=(600, 800), *args, **kwargs):
         super(Raw, self).__init__(*args, **kwargs)
         self.resolution = resolution
 
