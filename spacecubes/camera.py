@@ -175,7 +175,11 @@ class Camera:
         else:
             rot = math.acos(d)
         rot_axis = np.cross(world_fwd, camera_new_fwd)
-        rot_axis = rot_axis / math.sqrt(np.sum(rot_axis**2))
+        if not np.any(rot_axis):
+            # Rot axis is zero
+            rot_axis = [0, 0, 0]
+        else:
+            rot_axis = rot_axis / math.sqrt(np.sum(rot_axis**2))
         s = math.sin(rot * 0.5)
         return Quaternion(
             w=math.cos(rot * 0.5),
