@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "spacecubes"
-version = "0.3.0"
+version = "0.3.1"
 description = "Simple rendering of three-dimensional NumPy arrays"
 authors = ["Johan Modin <johan.modin92@gmail.com>"]
 license = "Apache-2.0"
