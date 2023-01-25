@@ -9,7 +9,7 @@
 ## Demo
 ![Alt Text](https://media.giphy.com/media/1XADnkAnPnnw2YyCAg/giphy.gif)
 
-Below is how the Windows 95 screensaver could be recreated using spacecubes ([examples/windows_screensaver](examples/windows_screensaver.py)).
+Below is how the Windows 95 screensaver-esque demo was created using spacecubes ([examples/windows_screensaver](examples/windows_screensaver.py)).
 ```python
 import numpy as np
 from spacecubes import Camera
@@ -51,6 +51,8 @@ while True:
 Other examples with more a fleshed out description can be found in the [examples](examples) directory.
 
 ## Features
+Any NumPy array with 3 dimensions can be rendered. All non-zero values in the array are considered voxels, while elements with value 0 will be treated as empty space.
+
 ### IO Devices
 An IO Device in spacecubes is what (optionally) [handles user input](examples/interactive_camera.py) and definitely handles image frame output. The output can be done e.g., through visualization or raw dump. The IO Device needs to know what colors to map each value in the numpy array with, which is what the `colors` argument does. The available io_devices are specified below along with how they are used:
 ```python
@@ -107,6 +109,8 @@ for interp_amount in range(100):
     camera.look_at_interpolated(x=3, y=5, z=2, amount=interp_amount / 100)
     device.render(world, camera)
 ```
+
+
 
 
 ## Installation
