@@ -1,7 +1,13 @@
 
 # spacecubes
 *Now listen you Royal Highness, take only what you need to survive!*
-![](media/screensaver.gif)
+
+
+## Overview
+`spacecubes` is a simple voxel renderer for three-dimensional NumPy arrays. It is made to be easy to use and allowing fast visualization. It is not made to produce good looking images or be feature rich.
+
+## Demo
+![](https://s3.gifyu.com/images/screensaver.gif)
 
 Below is how the Windows 95 screensaver could be recreated using spacecubes ([examples/windows_screensaver](examples/windows_screensaver.py)).
 ```python
@@ -24,9 +30,6 @@ while True:
     camera.move(forward=0.1)
     device.render(world, camera)
 ```
-
-## Overview
-`spacecubes` is a simple voxel renderer for three-dimensional NumPy arrays. It is made to be easy to use and allowing fast visualization. It is not made to produce good looking images or be feature rich.
 
 ## Examples
 Rendering a single voxel (cube) in OpenCV and flying the camera around it can be done by running:
