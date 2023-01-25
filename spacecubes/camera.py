@@ -36,7 +36,7 @@ class Camera:
     def _quaternion_from_yaw_pitch_roll(self, yaw=0, pitch=0, roll=0):
         """Create a quaternion from yaw, pitch and roll given in radians
 
-        Args: 
+        Args:
             yaw (float): Yaw in radians
             pitch (float): Pitch in radians
             roll (float): Roll in radians
@@ -122,14 +122,46 @@ class Camera:
     def rotation(self):
         return self.Q
 
-    def look_at(self, x, y, z):
-        """ Sets the camera to look at a world position given as x, y, z.
+    def look_at_interpolated(self, x, y, z, amount):
+        """Interpolated version of look_at. By specifying the amount,
+        the camera can either be pointed directly
+        at the (x, y, z) location by using amount=1, or in the current
+        direction by setting amount=0, or somewhere in between by
+        specifying amount to be in the [0, 1] range.
 
-            Args:
-                x (float): The x-coordinate of the world position to look at
-                y (float): The y-coordinate of the world position to look at
-                z (float): The z-coordinate of the world position to look at
+        Can for example be used in a for loop to create smooth camera rotation.
+
+        Note that as this method always uses the current camera
+        quaternion, the interpolation will not be linear if called repeatedly
+        with equally-sized amount-steps, but rather slow down as the
+        camera approaches looking at the target position.
+
+        Args:
+            x (float): The x-coordinate of the world position to look at
+            y (float): The y-coordinate of the world position to look at
+            z (float): The z-coordinate of the world position to look at
+            amount (float): The interpolation amount between the current
+                camera pose and the target camera pose
         """
+        look_at_quaternion = self._create_look_at_quaternion(x, y, z)
+        self.Q = Quaternion.slerp(self.Q, look_at_quaternion, amount)
+        self._regenerate_extrinsic_matrix()
+        print(self.Q)
+
+    def look_at(self, x, y, z):
+        """Sets the camera to look at a world position given as x, y, z.
+
+        Args:
+            x (float): The x-coordinate of the world position to look at
+            y (float): The y-coordinate of the world position to look at
+            z (float): The z-coordinate of the world position to look at
+        """
+        # Create a quatenion
+        self.Q = self._create_look_at_quaternion(x, y, z)
+        self._regenerate_extrinsic_matrix()
+
+    def _create_look_at_quaternion(self, x, y, z):
+        """Creates a quaternion that looks at the target world position"""
         # Finds a quaternion that has its axis pointed at the target position
         src = np.array([self.x, self.y, self.z], dtype=np.float64)
         dst = np.array([x, y, z], dtype=np.float64)
@@ -146,21 +178,20 @@ class Camera:
         rot_axis = np.cross(world_fwd, camera_new_fwd)
         rot_axis = rot_axis / math.sqrt(np.sum(rot_axis**2))
         s = math.sin(rot * 0.5)
-        self.Q = Quaternion(
+        return Quaternion(
             w=math.cos(rot * 0.5),
             x=rot_axis[0] * s,
             y=rot_axis[1] * s,
             z=rot_axis[2] * s,
         )
-        self._regenerate_extrinsic_matrix()
 
     def move_xyz(self, x=0, y=0, z=0):
         """Translates the camera in world coordinates
 
-            Args:
-                x (float): The movement along the world x axis
-                y (float): The movement along the world y axis
-                z (float): The movement along the world z axis
+        Args:
+            x (float): The movement along the world x axis
+            y (float): The movement along the world y axis
+            z (float): The movement along the world z axis
         """
         self.x += x
         self.y += y
@@ -169,11 +200,11 @@ class Camera:
 
     def move_to_xyz(self, x, y, z):
         """Set the camera to a position given in world coordinates
-        
-            Args:
-                x (float): The x-coordinate of the new position
-                y (float): The y-coordinate of the new position
-                z (float): The z-coordinate of the new position
+
+        Args:
+            x (float): The x-coordinate of the new position
+            y (float): The y-coordinate of the new position
+            z (float): The z-coordinate of the new position
         """
         self.x = x
         self.y = y
@@ -224,11 +255,11 @@ class Camera:
 
     def rotate(self, yaw=0, pitch=0, roll=0):
         """Rotates the camera the given amount of roll, pitch and yaw
-        
-            Args:
-                yaw (float): Angle to yaw in radians
-                pitch (float): Angle to pitch in radians
-                roll (float): Angle to roll in radians
+
+        Args:
+            yaw (float): Angle to yaw in radians
+            pitch (float): Angle to pitch in radians
+            roll (float): Angle to roll in radians
         """
         self.Q *= self._quaternion_from_yaw_pitch_roll(yaw=yaw, pitch=pitch, roll=roll)
         self._regenerate_extrinsic_matrix()
