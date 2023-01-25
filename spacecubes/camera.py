@@ -146,7 +146,6 @@ class Camera:
         look_at_quaternion = self._create_look_at_quaternion(x, y, z)
         self.Q = Quaternion.slerp(self.Q, look_at_quaternion, amount)
         self._regenerate_extrinsic_matrix()
-        print(self.Q)
 
     def look_at(self, x, y, z):
         """Sets the camera to look at a world position given as x, y, z.

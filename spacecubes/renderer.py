@@ -28,7 +28,7 @@ class Renderer:
         self.border_value = border_value
         self.cell_grid_image_size = None
 
-    def world_points_to_image_points(self, world_points, camera, image_size):
+    def _world_points_to_image_points(self, world_points, camera, image_size):
         """Takes a set of world points and a Camera object and
         projects these points into the camera's image frame.
         """
@@ -40,13 +40,13 @@ class Renderer:
 
         # Project the points into the image frame
         h, w = image_size
-        image_points, visible_indices = self.project_points(
+        image_points, visible_indices = self._project_points(
             camera_points, camera, (h, w)
         )
         image_points = image_points.T.reshape(original_surface_shape + (2,))
         return image_points, visible_indices
 
-    def cube2surface(self, points, dim):
+    def _cube2surface(self, points, dim):
         """Takes a set of Nx3 points and a dimension and produces
         a square for every point that represents the cell's surface
         in that dimension. If this is done with a positive and a negative offset
@@ -61,19 +61,13 @@ class Renderer:
         surfaces = surface_corner_offsets + points[:, np.newaxis, :]
         return surfaces
 
-    def points_to_surfaces(self, world_array):
+    def _points_to_surfaces(self, world_array):
         """Create world surfaces from world points
 
-        Returns a dict where each key is a dimension and a direction and the corresponding
-        values are dicts with two keys: 'coordinates' and 'values'.
-        Under the coordinates key are t he surface quads that have the
-        key's dimension as its constant dimension and the key's direction as
-        its "outer" direction. E.g., the key (0, -1, 0) holds all surface
-        quads that make up the surfaces in the negative y direction if the
-        coordinates are ordered as (x, y, z). The surfaces are numpy arrays
-        of sets of four points that make up the quad defining a cell's surface
-        in one dimension and direction. The 'values' key holds the corresponding cell
-        values as defined in the world array.
+        Returns a world point dict and their corresponding values as dict.
+        Both of these dictionaries or organized such that each surface normal
+        direction has its own key, e.g., (-1, 0, 0) and (1, 0, 0) are the two
+        keys for the surfaces in the x-direction.
         """
         # Below is the algorithm for finding surfaces in the numpy array world
         # Essentially, we pad the world with a zeros in each dimension
@@ -116,24 +110,15 @@ class Renderer:
 
         # Turn the point & direction data into sets of 4 points
         # that define a surface of the cell
-        x_surfaces_pos_w = self.cube2surface(x_outer_points_pos_w, 0)
-        x_surfaces_neg_w = self.cube2surface(x_outer_points_neg_w, 0)
-        y_surfaces_pos_w = self.cube2surface(y_outer_points_pos_w, 1)
-        y_surfaces_neg_w = self.cube2surface(y_outer_points_neg_w, 1)
-        z_surfaces_pos_w = self.cube2surface(z_outer_points_pos_w, 2)
-        z_surfaces_neg_w = self.cube2surface(z_outer_points_neg_w, 2)
+        x_surfaces_pos_w = self._cube2surface(x_outer_points_pos_w, 0)
+        x_surfaces_neg_w = self._cube2surface(x_outer_points_neg_w, 0)
+        y_surfaces_pos_w = self._cube2surface(y_outer_points_pos_w, 1)
+        y_surfaces_neg_w = self._cube2surface(y_outer_points_neg_w, 1)
+        z_surfaces_pos_w = self._cube2surface(z_outer_points_pos_w, 2)
+        z_surfaces_neg_w = self._cube2surface(z_outer_points_neg_w, 2)
 
-        # Make the data somewhat easier to interpret by putting it in a dict
+        # Make the data somewhat easier to interpret by putting it in dicts
         # where each axis positive and negative direction have their own keys
-        surface_data = {
-            (1, 0, 0): {"world_coordinates": x_surfaces_pos_w, "values": x_pos_values},
-            (-1, 0, 0): {"world_coordinates": x_surfaces_neg_w, "values": x_neg_values},
-            (0, 1, 0): {"world_coordinates": y_surfaces_pos_w, "values": y_pos_values},
-            (0, -1, 0): {"world_coordinates": y_surfaces_neg_w, "values": y_neg_values},
-            (0, 0, 1): {"world_coordinates": z_surfaces_pos_w, "values": z_pos_values},
-            (0, 0, -1): {"world_coordinates": z_surfaces_neg_w, "values": z_neg_values},
-        }
-
         world_points = {
             (1, 0, 0): x_surfaces_pos_w,
             (-1, 0, 0): x_surfaces_neg_w,
@@ -153,7 +138,7 @@ class Renderer:
         }
         return world_points, values
 
-    def project_points(self, points, camera, image_size):
+    def _project_points(self, points, camera, image_size):
         """Projects points from camera coordinate system (XYZ) to
         image plane (UV).
 
@@ -178,7 +163,7 @@ class Renderer:
         points_im = h_points_i[:2, :]
         return points_im, visible_indices
 
-    def point_pair_to_line(self, p1, p2):
+    def _point_pair_to_line(self, p1, p2):
         """Formula to get the line coefficients from two (potentially sets of) points
         on the form (N, 2)
         """
@@ -230,7 +215,7 @@ class Renderer:
         camera._regenerate_intrinsic_matrix(aspect_ratio=image_size[0] / image_size[1])
 
         # Get world coordinate system surfaces from the render-function of the parent Renderer
-        world_points, values = self.points_to_surfaces(world_array)
+        world_points, values = self._points_to_surfaces(world_array)
 
         # Ignore surfaces that are pointing away from us
         world_points, values = self._filter_nonvisible_surfaces(
@@ -243,7 +228,7 @@ class Renderer:
             (
                 image_points[surface_direction],
                 visible_indices,
-            ) = self.world_points_to_image_points(
+            ) = self._world_points_to_image_points(
                 world_points[surface_direction], camera, image_size
             )
 
@@ -360,16 +345,16 @@ class Renderer:
         d_per_surface = image_points[:, 3]
 
         # Calculate coefficients of each quad's edge lines
-        ba_k_per_surface, ba_m_per_surface = self.point_pair_to_line(
+        ba_k_per_surface, ba_m_per_surface = self._point_pair_to_line(
             a_per_surface, b_per_surface
         )
-        cb_k_per_surface, cb_m_per_surface = self.point_pair_to_line(
+        cb_k_per_surface, cb_m_per_surface = self._point_pair_to_line(
             b_per_surface, c_per_surface
         )
-        dc_k_per_surface, dc_m_per_surface = self.point_pair_to_line(
+        dc_k_per_surface, dc_m_per_surface = self._point_pair_to_line(
             c_per_surface, d_per_surface
         )
-        ad_k_per_surface, ad_m_per_surface = self.point_pair_to_line(
+        ad_k_per_surface, ad_m_per_surface = self._point_pair_to_line(
             d_per_surface, a_per_surface
         )
 
