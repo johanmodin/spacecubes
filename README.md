@@ -110,11 +110,18 @@ for interp_amount in range(100):
     device.render(world, camera)
 ```
 
-
-
-
 ## Installation
-spacecubes is available on PyPI: `pip install spacecubes`
+spacecubes is available on PyPI: 
+`pip install spacecubes[all]`
+
+`all` refers to optional modules needed for `io_devices`, such as OpenCV. Without the `all` tag, only the `io_devices` that rely
+on standard packages, such as ncurses, or no packages in the case of the Raw `io_device`, can be used.
+
+PyPI tags: 
+`spacecubes`
+`spacecubes[opencv]`
+`spacecubes[all]`
+
 
 ### Dependencies:
 - numpy
