@@ -4,7 +4,7 @@
 *spacecubes* is a simple voxel renderer for three-dimensional NumPy arrays. It is made to be easy to use and allowing fast visualization. It is not made to produce good looking images or be feature rich.
 
 ### Installation
-`pip install spacecubes[all]`
+`pip install 'spacecubes[all]'`
 
 ## Demo
 ![Alt Text](https://media.giphy.com/media/1XADnkAnPnnw2YyCAg/giphy.gif)
@@ -113,10 +113,10 @@ for interp_amount in range(100):
 ## Installation tags
 spacecubes can be installed using tags that specify which visualization packages to include. `all` will include all visualization packages, e.g., OpenCV. If no tag is specified, only `Raw` and `Terminal` IO devices can be used.
 
-PyPI tags: 
+PyPI tags (with apostrophes added for the packages with brackets to be installable in e.g., zsh shells): 
 - `spacecubes`
-- `spacecubes[opencv]`
-- `spacecubes[all]`
+- `'spacecubes[opencv]'`
+- `'spacecubes[all]'`
 
 
 ### Dependencies:
