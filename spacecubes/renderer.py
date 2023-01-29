@@ -81,7 +81,7 @@ class Renderer:
         # Make a new world array that is 0 and 1 valued
         # as we need it for our surface finding algorithm
         # The dtype is set to int8 as this speeds things up significantly
-        world_array_int = (world_array > 0).astype(np.int8)
+        world_array_int = (world_array != 0).astype(np.int8)
 
         # Pad with 0s in all dimensions to include boundaries of world
         world_array_int = np.pad(world_array_int, 1)
