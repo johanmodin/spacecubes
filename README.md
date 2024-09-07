@@ -9,7 +9,7 @@
 ## Demo
 ![Alt Text](https://media.giphy.com/media/1XADnkAnPnnw2YyCAg/giphy.gif)
 
-Below is how the Windows 95 screensaver-esque demo was created using spacecubes ([examples/windows_screensaver](examples/windows_screensaver.py)).
+Below is how the Windows 95 screensaver-esque demo was created using spacecubes ([examples/screensaver_opencv](examples/screensaver_opencv.py)).
 ```python
 import numpy as np
 from spacecubes import Camera
@@ -30,6 +30,11 @@ while True:
     camera.move(forward=0.1)
     device.render(world, camera)
 ```
+
+You can also render directly to the terminal. In this case, colored spaces are used as pixels. This is the ([examples/screensaver_terminal](examples/screensaver_terminal.py)) script, which runs the same demo as above but rendered directly in the terminal using curses. The resolution is changed by setting the font size (e.g., CTRL +, CTRL -) in the terminal, which is what happens when the window flickers. After closing the script, you may have to run `reset` to reset the terminal state.
+
+![Alt Text](https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExcDhwN2FpODExMzVxaGgzZTc1aHVxdHNyeTczcW1zN3R5eHpienY2YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/XW4vLbJC6gggCeY8l7/giphy.gif)
+
 
 ## Examples
 Rendering a single voxel (cube) in OpenCV and flying the camera around it can be done by running:
