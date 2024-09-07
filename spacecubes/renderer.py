@@ -138,7 +138,7 @@ class Renderer:
         }
         return world_points, values
 
-    def _project_points(self, points, camera, image_size):
+    def _project_points(self, points, camera, image_size, eps=1e-5):
         """Projects points from camera coordinate system (XYZ) to
         image plane (UV).
 
@@ -153,12 +153,15 @@ class Renderer:
         scale_mat = np.array([[image_size[0], 0, 0], [0, image_size[1], 0], [0, 0, 1]])
         h_points_i = scale_mat @ camera.intrinsic_matrix @ points
 
+        # Put points at depth 0 slightly behind camera to avoid zero division
+        h_points_i[2, :][h_points_i[2, :] == 0] = -eps
+
         h_points_i[0, :] = h_points_i[0, :] / h_points_i[2, :]
         h_points_i[1, :] = h_points_i[1, :] / h_points_i[2, :]
-
-        # Find points behind the camera
-        visible_indices = h_points_i[2, :] >= 0
-
+        
+        # Find points in front of the camera
+        visible_indices = h_points_i[2, :] > 0
+          
         # Remove the last column
         points_im = h_points_i[:2, :]
         return points_im, visible_indices
