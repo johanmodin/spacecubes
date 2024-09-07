@@ -20,7 +20,6 @@ class Terminal(IODevice):
 
     def __init__(self, colors={}, *args, **kwargs):
         super(Terminal, self).__init__(*args, **kwargs)
-
         # Curses setup
         # TODO: Find a solution so we can sort of wrap the evil curses terminal
         # state modifying code to avoid having bad terminals after a crash
@@ -32,6 +31,10 @@ class Terminal(IODevice):
         curses.use_default_colors()
 
         # Initialize all colors and save the color string -> pair index mapping
+        self.colors = self.setup_colors(colors)
+
+    def setup_colors(self, colors):
+        """Sets up color mappings for curses."""
         color_to_pair_idx = {}
         for color_idx in range(curses.COLORS):
             pair_idx = color_idx + 1
@@ -53,13 +56,11 @@ class Terminal(IODevice):
                 )
                 return color_pair
 
-        self.colors = ColorDict()
-        self.colors.update(
-            {
-                value: curses.color_pair(color_to_pair_idx[color])
-                for value, color in colors.items()
-            }
+        color_dict = ColorDict()
+        color_dict.update(
+            {value: curses.color_pair(color_to_pair_idx[color]) for value, color in colors.items()}
         )
+        return color_dict
 
     def get_resolution(self):
         # Return the writable area of the terminal, which

@@ -158,10 +158,10 @@ class Renderer:
 
         h_points_i[0, :] = h_points_i[0, :] / h_points_i[2, :]
         h_points_i[1, :] = h_points_i[1, :] / h_points_i[2, :]
-        
+
         # Find points in front of the camera
         visible_indices = h_points_i[2, :] > 0
-          
+
         # Remove the last column
         points_im = h_points_i[:2, :]
         return points_im, visible_indices
